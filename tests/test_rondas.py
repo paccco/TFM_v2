@@ -449,3 +449,49 @@ def test_ac_04_30_leer_task_solo_de_su_identidad(
     assert asyncio.run(leer_task(dsn, r.task.id, "otro")) is None
     assert asyncio.run(leer_task(dsn, str(uuid4()), COMPRADOR)) is None
     assert asyncio.run(leer_task(dsn, "no-es-uuid", COMPRADOR)) is None
+
+
+def test_turn_timeout_grande_no_bloquea_la_sesion(
+    dsn: str, agentes: ServidorHttp
+) -> None:
+    """`maquina-estados.md` §5: `turnTimeoutSeconds` no tiene máximo."""
+    ent = entorno(dsn, agentes)
+    r = recibir(ent, mensaje(config(agentes, turnTimeoutSeconds=10_000_000_000)))
+    asyncio.run(comprobar_sesion(ent, r.sesiones[0]))
+    assert filas(dsn, "SELECT estado FROM sesiones") == [("NEGOTIATING",)]
+
+
+def test_d_65_la_transicion_a_negotiating_renueva_el_arrendamiento(
+    dsn: str, agentes: ServidorHttp
+) -> None:
+    """`maquina-estados.md` §3: se renueva en cada transición."""
+    ent = entorno(dsn, agentes)
+    c = config(agentes, vendedor="lenta", turnTimeoutSeconds=10)
+    c["parties"][1]["agentCardUrl"] = f"{agentes.url}/lenta.json"
+    r = recibir(ent, mensaje(c))
+    asyncio.run(comprobar_sesion(ent, r.sesiones[0]))
+    [(segundos,)] = filas(
+        dsn,
+        "SELECT extract(epoch FROM arrendamiento_hasta - clock_timestamp()) FROM sesiones",
+    )
+    # Dura 11 s y la AgentCard tarda 3: sin renovar quedarían unos 8.
+    assert segundos > 10
+
+
+def test_duplicado_aceptado_termina_en_error_sin_escribir(
+    dsn: str, agentes: ServidorHttp
+) -> None:
+    """D-98: hasta feature/rechazos-peticiones, error sin escritura, nunca un bucle."""
+    ent = entorno(dsn, agentes)
+    recibir(ent, mensaje(config(agentes)))
+
+    async def segundo() -> None:
+        await asyncio.wait_for(
+            recibir_peticion(ent, mensaje(config(agentes)), {URI_EXTENSION}, COMPRADOR),
+            timeout=5,
+        )
+
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        asyncio.run(segundo())
+    assert filas(dsn, "SELECT count(*) FROM sesiones") == [(1,)]
+    assert filas(dsn, "SELECT count(*) FROM registro_peticiones") == [(1,)]

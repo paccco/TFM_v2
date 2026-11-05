@@ -390,3 +390,11 @@ def test_ac_04_27_tipo_no_legible_queda_sin_tipo() -> None:
     )
     assert v.tipo is None
     assert v.sender == COMPRADOR
+
+
+@pytest.mark.parametrize("raro", [{"a": 1}, [1], 1, True])
+def test_type_que_no_es_cadena_es_wrong_type(raro: Any) -> None:
+    """D-89: un `type` de cualquier forma se rechaza; no es un error interno."""
+    v = validar(mensaje(sobre={"type": raro, "sender": COMPRADOR}))
+    assert v.fallos == [Fallo("WRONG_TYPE", "envelope.type")]
+    assert v.tipo is None

@@ -102,7 +102,7 @@ def validar_peticion(
     tipo: str | None = None
     sender: str | None = None
     if isinstance(sobre, dict):
-        if sobre.get("type") in TIPOS_PETICION:
+        if isinstance(sobre.get("type"), str) and sobre["type"] in TIPOS_PETICION:
             tipo = sobre["type"]
         if isinstance(sobre.get("sender"), str):
             sender = sobre["sender"]

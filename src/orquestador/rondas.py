@@ -28,6 +28,9 @@ from orquestador.peticiones import (
 )
 
 ORCHESTRATOR = "ORCHESTRATOR"
+# D-65: duración del arrendamiento. `bigint` porque `turnTimeoutSeconds` no tiene máximo.
+FIN_ARRENDAMIENTO = """clock_timestamp() + make_interval(secs =>
+    (config->>'turnTimeoutSeconds')::bigint + (config->>'pollIntervalSeconds')::bigint)"""
 # D-98, D-128: duplicado de `sender` + `messageId`; nunca es una colisión de identificadores.
 INDICE_DUPLICADOS = "registro_peticiones_unica"
 
@@ -136,9 +139,8 @@ async def _aceptar(
             await c.execute(
                 """
                 INSERT INTO sesiones (session_id, request_id, ronda, item_id, config, version,
-                                      instancia, arrendamiento_hasta, estado)
-                VALUES (%s, %s, %s, %s, %s, 1, %s,
-                        clock_timestamp() + make_interval(secs => %s), 'CREATED')
+                                      instancia, estado)
+                VALUES (%s, %s, %s, %s, %s, 1, %s, 'CREATED')
                 """,
                 (
                     session_id,
@@ -147,8 +149,12 @@ async def _aceptar(
                     sesion.item_id,
                     Jsonb(sesion.config),
                     entorno.instancia,
-                    _duracion_arrendamiento(sesion.config),
                 ),
+            )
+            await c.execute(
+                f"UPDATE sesiones SET arrendamiento_hasta = {FIN_ARRENDAMIENTO}"
+                " WHERE session_id = %s",
+                (session_id,),
             )
         await _insertar_task(c, task, identidad)
         await _anotar_entrada(
@@ -169,11 +175,9 @@ async def comprobar_sesion(entorno: Entorno, session_id: str) -> None:
     """Pasos 8 a 10: renueva el arrendamiento, comprueba las AgentCards y sale de `CREATED`."""
     async with await conectar(entorno.dsn) as c:
         cursor = await c.execute(
-            """
+            f"""
             UPDATE sesiones
-            SET version = version + 1,
-                arrendamiento_hasta = clock_timestamp() + make_interval(secs =>
-                    (config->>'turnTimeoutSeconds')::int + (config->>'pollIntervalSeconds')::int)
+            SET version = version + 1, arrendamiento_hasta = {FIN_ARRENDAMIENTO}
             WHERE session_id = %s AND estado = 'CREATED' AND instancia = %s
             RETURNING version, config
             """,
@@ -235,10 +239,10 @@ async def _transicion(
 ) -> None:
     if fallida is None:
         cursor = await c.execute(
-            """
+            f"""
             UPDATE sesiones
             SET estado = 'NEGOTIATING', subestado = 'READY', turn = 1, attempt = 1,
-                message_id = %s, version = version + 1
+                message_id = %s, version = version + 1, arrendamiento_hasta = {FIN_ARRENDAMIENTO}
             WHERE session_id = %s AND version = %s
             RETURNING request_id, ronda
             """,
@@ -322,11 +326,6 @@ async def _completar_task(
         "UPDATE tareas SET datos = %s WHERE task_id = %s",
         (task_a_json(task), task_id),
     )
-
-
-def _duracion_arrendamiento(config: dict[str, Any]) -> int:
-    """D-65: `turnTimeoutSeconds + pollIntervalSeconds`."""
-    return config["turnTimeoutSeconds"] + config["pollIntervalSeconds"]
 
 
 def _sobre(tipo: str) -> dict[str, str]:
