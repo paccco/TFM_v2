@@ -5,19 +5,22 @@ Este capítulo explica los estados por los que pasa una sesión y lo que se guar
 \section{Estados de la sesión}
 
 \begin{verbatim}
-            OPEN_ROUND aceptado
-                    |
-                    v
-                 CREATED ----------------> NOT_STARTED
-                    |   AgentCard no válida   (final)
-                    |   AgentCards válidas
-                    v
-   +---------> NEGOTIATING
-   |  PROPOSE o     |   |   |
-   |  COUNTEROFFER  |   |   +-- WITHDRAW, COUNTEROFFER del último
-   +----------------+   |       turno o primer fallo --> CLOSING
-     (turn + 1)         |
-                        +-- ACCEPT --> HELD
+        OPEN_ROUND aceptado
+               |
+               v
+            CREATED -- AgentCard no válida --> NOT_STARTED
+               |                                 (final)
+               | AgentCards válidas
+               v
+     +--> NEGOTIATING -- ACCEPT --> HELD
+     |       |    |
+     +-------+    | WITHDRAW, COUNTEROFFER del último
+   PROPOSE o      | turno o primer fallo
+   COUNTEROFFER   v
+   (turn + 1)  CLOSING
+                  | SESSION_CLOSE enviado o fallido
+                  v
+               CLOSED (final)
 \end{verbatim}
 
 \begin{tabular}{p{3cm}p{10.5cm}}
@@ -27,9 +30,10 @@ Este capítulo explica los estados por los que pasa una sesión y lo que se guar
   \texttt{NEGOTIATING} & Hay un turno en curso, en \texttt{READY} o en \texttt{AWAITING\_TASK}. \\
   \texttt{HELD} & Un \texttt{ACCEPT} dejó un acuerdo provisional sobre la oferta vigente (D-77, D-84). \\
   \texttt{CLOSING} & El resultado está decidido y guardado. Falta avisar a las partes con \texttt{SESSION\_CLOSE}. \\
+  \texttt{CLOSED} & \texttt{SESSION\_CLOSE} se ha enviado o intentado a las dos partes. Es final, y el resultado no cambia (D-49). \\
 \end{tabular}
 
-\texttt{CLOSED}, la salida de \texttt{HELD} y los envíos de \texttt{AGREEMENT\_HELD} y \texttt{SESSION\_CLOSE} están pendientes de implementar. Por ahora, una sesión se queda en \texttt{HELD} o en \texttt{CLOSING} con esos envíos marcados como \texttt{PENDIENTE}.
+La salida de \texttt{HELD} y el envío de \texttt{AGREEMENT\_HELD} están pendientes de implementar. Por ahora, una sesión en \texttt{HELD} se queda ahí, con ese envío marcado como \texttt{PENDIENTE}.
 
 \section{Subestados del turno}
 
@@ -56,6 +60,10 @@ Solo se guardan los puntos en los que el orquestador espera a la red. La validac
 
 En esta versión, \texttt{maxRetries} es siempre 0, así que el primer fallo agota los reintentos y aborta la sesión. El reintento con \texttt{attempt + 1} y \texttt{retryReason} está pendiente de implementar (\texttt{feature/reintentos-aborto}).
 
+\section{Cierre}
+
+En \texttt{CLOSING}, el registro de sesión guarda el estado del envío de \texttt{SESSION\_CLOSE} a cada parte: \texttt{PENDIENTE}, \texttt{ENVIADO} o \texttt{FALLIDO}. Cada marca se escribe en su propia transacción, junto con su entrada en el registro de envíos de control (D-70). La transacción que marca el último envío pendiente pasa la sesión a \texttt{CLOSED} (CU-02). Si los dos envíos fallan, la sesión también llega a \texttt{CLOSED}, con el mismo resultado.
+
 \section{Tablas}
 
 \begin{tabular}{p{3.5cm}p{10cm}}
@@ -64,6 +72,7 @@ En esta versión, \texttt{maxRetries} es siempre 0, así que el primer fallo ago
   \texttt{actos\_aceptados} & Un acto por turno resuelto: \texttt{turn}, emisor, tipo, oferta o \texttt{reason}, \texttt{taskId} e instante. Solo se añade. \\
   \texttt{fallos} & Un fallo por fila: \texttt{turn}, \texttt{attempt}, \texttt{taskId} si lo hay, \texttt{code}, \texttt{field} e instante. Solo se añade. \\
   \texttt{coerciones} & Creada y vacía: solo se llena en modo tolerante, que aún no está implementado. \\
+  \texttt{envios\_control} & Un envío de \texttt{SESSION\_CLOSE} por fila: parte, \texttt{turn}, instante, resultado y, según el caso, \texttt{taskId} y estado de la Task, si llegó un Message, o el código del fallo (D-70). Solo se añade. \\
 \end{tabular}
 
 Cada transición escribe el registro de sesión y sus filas de registro en una sola transacción (D-63, D-69). Todos los instantes los da el reloj de PostgreSQL.

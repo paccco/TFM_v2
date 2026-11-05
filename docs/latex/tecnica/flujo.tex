@@ -57,9 +57,22 @@ Un error A2A en \texttt{GetTask} distinto de \texttt{TaskNotFoundError} no está
 
 Un agente hecho con \texttt{a2a-sdk} que publica la Task sin estado la deja en \texttt{TASK\_STATE\_UNSPECIFIED}. Cuenta como estado desconocido: \texttt{TASK\_INTERRUPTED}. El agente debe publicarla en \texttt{TASK\_STATE\_SUBMITTED}.
 
+\section{Cierre}
+
+Si la negociación deja la sesión en \texttt{CLOSING}, la misma tarea la cierra con el arrendamiento que ya tiene (CU-02):
+
+\begin{enumerate}
+  \item Renueva el arrendamiento y lee el resultado, el \texttt{turn}, los \texttt{contextId} y qué envíos siguen pendientes (AC-02-14).
+  \item Lanza a la vez un \texttt{SendMessage} con \texttt{SESSION\_CLOSE} a cada parte pendiente, con un solo intento (D-64).
+  \item Según llega cada respuesta, escribe en una transacción la marca de esa parte y su entrada en el registro de envíos de control. El instante de la entrada es el de esa escritura, así que la latencia de un agente no se mezcla con la del otro (D-69). Las dos escrituras se hacen una tras otra (D-63).
+  \item La escritura que marca el último envío pendiente pasa la sesión a \texttt{CLOSED}.
+\end{enumerate}
+
+Un envío que falla, o un fallo al escribir su marca, no corta el otro. Si otra instancia ha escrito antes, la escritura no afecta a ninguna fila y la instancia descarta el resto de su trabajo (AC-02-13).
+
 \section{Pendiente}
 
 \begin{itemize}
-  \item Retomar una sesión de una instancia caída (\texttt{feature/recuperacion}). Lo que se guarda ya lo permite: en \texttt{READY} se reenvía el mismo \texttt{messageId}, y en \texttt{AWAITING\_TASK} se sigue sondeando la misma Task con el tiempo que le queda.
-  \item Enviar \texttt{AGREEMENT\_HELD} y \texttt{SESSION\_CLOSE} (\texttt{feature/agreement-held}, \texttt{feature/cierre-sesion}).
+  \item Retomar una sesión de una instancia caída (\texttt{feature/recuperacion}). Lo que se guarda ya lo permite: en \texttt{READY} se reenvía el mismo \texttt{messageId}; en \texttt{AWAITING\_TASK} se sigue sondeando la misma Task con el tiempo que le queda, y en \texttt{CLOSING} solo se envía a las partes que siguen pendientes.
+  \item Enviar \texttt{AGREEMENT\_HELD} (\texttt{feature/agreement-held}).
 \end{itemize}
