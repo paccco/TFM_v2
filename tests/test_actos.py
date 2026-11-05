@@ -107,10 +107,10 @@ def test_d_132_enteros_con_parte_decimal_nula_se_aceptan_como_enteros() -> None:
     )
 
 
-def test_d_133_entero_de_4300_cifras_se_acepta() -> None:
-    acto = validar(task({"offer": oferta(quantity=leer("1E+4299"))}, sobre()))
+def test_d_133_entero_de_4299_cifras_se_acepta() -> None:
+    acto = validar(task({"offer": oferta(quantity=leer("1E+4298"))}, sobre()))
     assert acto.fallos == []
-    assert acto.oferta is not None and acto.oferta["quantity"] == 10**4299
+    assert acto.oferta is not None and acto.oferta["quantity"] == 10**4298
 
 
 def test_precio_entero_y_ceros_finales_no_exigen_redondear() -> None:
@@ -296,7 +296,7 @@ def test_cuerpo_no_valido(cuerpo: Any, tipo: str, turn: int, esperado: Fallo) ->
         ("deliveryDays", "30", "WRONG_TYPE"),  # R-12
         ("deliveryDays", Decimal("30.5"), "WRONG_TYPE"),
         ("deliveryDays", leer("1E+999999999"), "OUT_OF_RANGE"),  # D-133
-        ("quantity", leer("1E+4300"), "OUT_OF_RANGE"),  # 4301 cifras
+        ("quantity", leer("1E+4299"), "OUT_OF_RANGE"),  # 4300 cifras (D-133)
         ("quantity", Decimal("0.0"), "OUT_OF_RANGE"),  # D-132: 0.0 es el entero 0
         ("paymentDays", -1, "OUT_OF_RANGE"),
         ("paymentDays", "omitir", "MISSING_FIELD"),
