@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS sesiones (
     turn                integer,
     attempt             integer,
     message_id          text,             -- D-66
-    failed_party_id     text              -- D-99
+    failed_party_id     text,             -- D-99
+    urls_servicio       jsonb             -- partyId → URL JSON-RPC (D-131)
 );
 
 -- Tasks de las peticiones del comprador (D-97, D-127), con la identidad que las creó (D-128).
