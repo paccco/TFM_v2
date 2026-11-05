@@ -20,7 +20,9 @@ DSN = os.environ.get("DATABASE_URL", "postgresql://tfm:tfm@127.0.0.1:55432/tfm")
 def conexion() -> Iterator[psycopg.Connection]:
     # Tablas temporales: desaparecen con la conexión y no tocan nada de la base de datos.
     with psycopg.connect(DSN, autocommit=True) as c:
-        c.execute("CREATE TEMP TABLE sesiones (id int PRIMARY KEY, version int NOT NULL)")
+        c.execute(
+            "CREATE TEMP TABLE sesiones (id int PRIMARY KEY, version int NOT NULL)"
+        )
         c.execute("CREATE TEMP TABLE registro (id int PRIMARY KEY)")
         yield c
 
@@ -49,14 +51,18 @@ def test_uv_sync_deja_un_entorno_limpio_e_importable(tmp_path: Path) -> None:
     assert resultado.returncode == 0, resultado.stderr
 
 
-def test_conexion_a_la_version_fijada_de_postgresql(conexion: psycopg.Connection) -> None:
+def test_conexion_a_la_version_fijada_de_postgresql(
+    conexion: psycopg.Connection,
+) -> None:
     """D-69: la versión fijada en docker-compose.yml."""
     fila = conexion.execute("SHOW server_version").fetchone()
     assert fila is not None
     assert fila[0].startswith("18.6")
 
 
-def test_transaccion_entre_dos_tablas_se_deshace_entera(conexion: psycopg.Connection) -> None:
+def test_transaccion_entre_dos_tablas_se_deshace_entera(
+    conexion: psycopg.Connection,
+) -> None:
     """D-63, D-69: un fallo en la segunda tabla deshace también la primera."""
     with pytest.raises(psycopg.errors.UniqueViolation):
         with conexion.transaction():
