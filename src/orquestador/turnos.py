@@ -255,10 +255,11 @@ async def _esperar_task(entorno: Entorno, s: _Sesion, task: dict[str, Any]) -> b
     )
     async with await _conexion(entorno.dsn) as c:
         cursor = await c.execute(
-            """
+            f"""
             UPDATE sesiones
             SET subestado = 'AWAITING_TASK', task_id = %s, inicio_intento = %s,
-                context_ids = context_ids || %s, version = version + 1
+                context_ids = context_ids || %s, version = version + 1,
+                arrendamiento_hasta = {FIN_ARRENDAMIENTO}
             WHERE session_id = %s AND version = %s AND instancia = %s
             """,
             (
@@ -309,12 +310,14 @@ async def _reservar(
     c: psycopg.AsyncConnection[Any], entorno: Entorno, s: _Sesion
 ) -> datetime | None:
     """Abre la transición por versión y arrendamiento (D-63) y da su instante único (D-69).
+    Renueva el arrendamiento, como toda transición (D-65).
 
     None si otra instancia ha escrito antes: se descarta el trabajo.
     """
     cursor = await c.execute(
-        """
-        UPDATE sesiones SET version = version + 1
+        f"""
+        UPDATE sesiones
+        SET version = version + 1, arrendamiento_hasta = {FIN_ARRENDAMIENTO}
         WHERE session_id = %s AND version = %s AND instancia = %s
         RETURNING clock_timestamp()
         """,

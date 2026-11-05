@@ -665,3 +665,29 @@ def test_d_132_agente_hecho_con_a2a_sdk_llega_a_closing(
         "withdrawnBy": VENDEDOR,
         "lastOffers": [{"partyId": COMPRADOR, "offer": oferta("12.5")}],
     }
+
+
+@dataclass
+class _AgenteLento(Agente):
+    """Tarda en responder a `SendMessage`, como un agente real."""
+
+    async def __call__(self, request: Request) -> Response:
+        if b'"SendMessage"' in await request.body():
+            await asyncio.sleep(0.5)
+        return await super().__call__(request)
+
+
+def test_d_65_cada_transicion_renueva_el_arrendamiento(
+    dsn: str, agentes: ServidorHttp
+) -> None:
+    """`maquina-estados.md` §3: el arrendamiento se renueva en cada transición, no solo al
+    tomar la sesión antes de `SendMessage`."""
+    ent, sid, _ = preparar(dsn, agentes, {})
+    agentes.rpc = _AgenteLento(dsn, {1: [acto("WITHDRAW")]})
+    asyncio.run(negociar(ent, sid))
+    s = sesion(dsn)
+    [(instante,)] = registro(dsn, "SELECT instante FROM actos_aceptados")
+    duracion = timedelta(
+        seconds=s["config"]["turnTimeoutSeconds"] + s["config"]["pollIntervalSeconds"]
+    )
+    assert s["arrendamiento_hasta"] - instante >= duracion - timedelta(seconds=0.1)

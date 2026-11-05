@@ -70,4 +70,4 @@ Cada transición escribe el registro de sesión y sus filas de registro en una s
 
 \section{Concurrencia}
 
-Una instancia solo trabaja con una sesión si tiene su arrendamiento (D-63, D-65). Lo renueva al tomar la sesión y en cada sondeo. Cada escritura exige que la versión del registro y la instancia sean las que leyó. Si otra instancia ha escrito antes, la escritura no afecta a ninguna fila y la instancia abandona la sesión sin escribir nada más.
+Una instancia solo trabaja con una sesión si tiene su arrendamiento (D-63, D-65). Lo renueva al tomar la sesión, en cada sondeo y en cada transición. Cada escritura exige que la versión del registro y la instancia sean las que leyó. Si otra instancia ha escrito antes, la escritura no afecta a ninguna fila y la instancia abandona la sesión sin escribir nada más.

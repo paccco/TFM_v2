@@ -83,18 +83,24 @@ class Manejador(RequestHandler):
         return guardada or recepcion.task
 
     async def _comprobar(self, sesiones: list[str]) -> None:
-        """D-99: sesiones en paralelo. Si algo falla, siguen en `CREATED` para otra instancia."""
+        """D-99: sesiones en paralelo, cada una por su cuenta."""
+        await asyncio.gather(*[self._comprobar_una(s) for s in sesiones])
+
+    async def _comprobar_una(self, session_id: str) -> None:
+        """Si la comprobación falla, la sesión sigue en `CREATED` para otra instancia.
+
+        Si no, negocia en seguida, sin esperar a las demás. D-94: la respuesta no espera a la
+        negociación. Una sesión en `NOT_STARTED` no negocia: `negociar` solo toma las que
+        siguen en `NEGOTIATING`.
+        """
         try:
-            await asyncio.gather(
-                *[comprobar_sesion(self._entorno, s) for s in sesiones]
-            )
+            await comprobar_sesion(self._entorno, session_id)
         except Exception:
-            logger.exception("Fallo al comprobar las AgentCards de una ronda")
+            logger.exception(
+                "Fallo al comprobar las AgentCards de la sesión %s", session_id
+            )
             return
-        # D-94: la respuesta no espera a la negociación. Las sesiones en `NOT_STARTED` no
-        # negocian: `negociar` solo toma las que siguen en `NEGOTIATING`.
-        for s in sesiones:
-            self._lanzar(self._negociar(s))
+        self._lanzar(self._negociar(session_id))
 
     async def _negociar(self, session_id: str) -> None:
         """CU-01 y CU-03. Si algo falla, la sesión queda guardada para otra instancia (D-63)."""

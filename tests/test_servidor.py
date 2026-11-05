@@ -8,6 +8,7 @@ import httpx
 import psycopg
 import pytest
 
+from orquestador import servidor
 from orquestador.peticiones import MEDIA_PETICION, URI_EXTENSION, origen
 from orquestador.rondas import Entorno
 from orquestador.servidor import crear_app, leer_origenes, leer_tokens
@@ -308,3 +309,31 @@ def test_leer_origenes() -> None:
     for raro in ("a.test", "http://", "::"):
         with pytest.raises(ValueError, match="ORQUESTADOR_ORIGENES_AGENTES"):
             leer_origenes(raro)
+
+
+def test_d_63_un_fallo_al_comprobar_una_sesion_no_para_las_demas(
+    dsn: str, orquestador: str, agentes: ServidorHttp, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cada sesión negocia en cuanto sale de `CREATED`, falle o no la de al lado."""
+    original = servidor.comprobar_sesion
+    llamadas: list[str] = []
+
+    async def falla_la_primera(entorno: Entorno, session_id: str) -> None:
+        llamadas.append(session_id)
+        if len(llamadas) == 1:
+            raise RuntimeError("fallo simulado")
+        await original(entorno, session_id)
+
+    monkeypatch.setattr(servidor, "comprobar_sesion", falla_la_primera)
+    agentes.rpc = Agente(dsn, {1: [acto("WITHDRAW")]})
+    params = open_round(config(agentes))
+    sesiones = params["message"]["parts"][0]["data"]["sessions"]
+    sesiones.append({"itemId": "i1", "config": sesiones[0]["config"]})
+    enviar(orquestador, {**params, "configuration": {"returnImmediately": True}})
+    with psycopg.connect(dsn) as c:
+        for _ in range(50):
+            estados = sorted(e for (e,) in c.execute("SELECT estado FROM sesiones"))
+            if estados == ["CLOSING", "CREATED"]:
+                break
+            time.sleep(0.1)
+    assert estados == ["CLOSING", "CREATED"]

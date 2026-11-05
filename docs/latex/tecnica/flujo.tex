@@ -4,7 +4,7 @@ Este capítulo sigue una sesión desde que sale de \texttt{CREATED} hasta que de
 
 \section{Arranque}
 
-Tras comprobar las AgentCards de una ronda, el manejador lanza la negociación de cada sesión en una tarea de fondo (CU-04). La respuesta a \texttt{OPEN\_ROUND} no la espera (D-94). Una sesión en \texttt{NOT\_STARTED} no negocia.
+Tras comprobar las AgentCards de una ronda, el manejador lanza la negociación de cada sesión en una tarea de fondo (CU-04). Cada sesión empieza en cuanto termina su propia comprobación, sin esperar a las demás, y un fallo al comprobar una no detiene al resto. La respuesta a \texttt{OPEN\_ROUND} no espera a la negociación (D-94). Una sesión en \texttt{NOT\_STARTED} no negocia.
 
 \section{Un turno}
 
