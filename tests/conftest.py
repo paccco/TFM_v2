@@ -5,6 +5,7 @@ import os
 import threading
 import time
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -72,16 +73,12 @@ def _app_de_tarjetas(servidor: ServidorHttp) -> Starlette:
     return Starlette(routes=[Route("/{ruta:path}", responder, methods=["GET", "POST"])])
 
 
-@pytest.fixture(scope="session")
-def _servidor_de_tarjetas() -> Iterator[ServidorHttp]:
-    servidor = ServidorHttp(url="")
+@contextmanager
+def levantar(app: Starlette) -> Iterator[str]:
+    """Sirve la aplicación con uvicorn en un hilo y devuelve su URL."""
     uv = uvicorn.Server(
         uvicorn.Config(
-            _app_de_tarjetas(servidor),
-            host="127.0.0.1",
-            port=0,
-            log_level="warning",
-            lifespan="off",
+            app, host="127.0.0.1", port=0, log_level="warning", lifespan="off"
         )
     )
     hilo = threading.Thread(target=uv.run, daemon=True)
@@ -89,10 +86,19 @@ def _servidor_de_tarjetas() -> Iterator[ServidorHttp]:
     while not uv.started:
         time.sleep(0.01)
     puerto = uv.servers[0].sockets[0].getsockname()[1]
-    servidor.url = f"http://127.0.0.1:{puerto}"
-    yield servidor
-    uv.should_exit = True
-    hilo.join(timeout=5)
+    try:
+        yield f"http://127.0.0.1:{puerto}"
+    finally:
+        uv.should_exit = True
+        hilo.join(timeout=5)
+
+
+@pytest.fixture(scope="session")
+def _servidor_de_tarjetas() -> Iterator[ServidorHttp]:
+    servidor = ServidorHttp(url="")
+    with levantar(_app_de_tarjetas(servidor)) as url:
+        servidor.url = url
+        yield servidor
 
 
 @pytest.fixture
