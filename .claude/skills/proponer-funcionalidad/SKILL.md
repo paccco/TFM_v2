@@ -11,7 +11,7 @@ Durante toda la skill: solo lectura, y delegación únicamente en `explorador` y
 
 ## Pasos
 
-1. **Leer la especificación.** Si es un caso de uso, su tarjeta en `docs/contexto/casos-de-uso/` y las D-xx y AC-xx que cita.
+1. **Leer la especificación.** Si es un caso de uso, su tarjeta en `docs/contexto/casos-de-uso/` y las D-xx, R-xx y AC-cc-nn que cita.
 2. **Comprobar que es implementable.** No hagas propuesta, y pregunta, si:
    - la tarjeta no existe o no está «aprobado» en `docs/contexto/casos-de-uso/README.md`;
    - cita reglas que no existen;
@@ -27,7 +27,7 @@ Durante toda la skill: solo lectura, y delegación únicamente en `explorador` y
 ```
 Rama: feature/cu-xx-<tema>
 Qué hará: <dos o tres frases>
-Implementa: CU-xx · D-xx · AC-xx
+Implementa: CU-xx · D-xx · R-xx · AC-cc-nn
 Ficheros: <rutas que tocarás o crearás>
 Tests: <al menos uno por criterio de aceptación de la tarjeta>
 LaTeX: <capítulos de docs/latex/manual y docs/latex/tecnica que actualizarás>

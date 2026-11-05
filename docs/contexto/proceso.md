@@ -12,7 +12,7 @@ Cambiar este fichero lo decide el desarrollador.
 - **`docs/contexto/` es la fuente de verdad.** Si el código y `docs/contexto/` discrepan, o la especificación es ambigua, para y pregunta. No modifiques la especificación por tu cuenta.
 - Las decisiones de `docs/contexto/decisiones.md` (D-xx) están cerradas: no las reabras ni propongas alternativas salvo que el desarrollador lo pida.
 - `docs/latex/` es documentación para personas, no especificación: nunca se usa como fuente de reglas.
-- Los cambios en `protocolo.md`, `maquina-estados.md`, `autocorreccion.md` y `decisiones.md` se muestran al desarrollador como diff y solo se guardan con su aprobación.
+- Los cambios en `protocolo.md`, `maquina-estados.md`, `configuracion-sesion.md`, `autocorreccion.md` y `decisiones.md` se muestran al desarrollador como diff y solo se guardan con su aprobación.
 
 ## 2. Código
 
@@ -20,14 +20,14 @@ El proyecto se reescribió en Python para que el desarrollador entienda todo el 
 
 - Código simple y explícito antes que ingenioso. Sin metaprogramación, sin abstracciones «por si acaso», sin dependencias que no se hayan acordado.
 - Una rama, un objetivo.
-- Docstrings y comentarios en español que citen la regla o decisión que implementan (`D-07`, `AC-03`, `CU-02`).
+- Docstrings y comentarios en español que citen la regla o decisión que implementan (`D-07`, `R-03`, `CU-02`). `AC-cc-nn` es siempre el criterio de aceptación `nn` de la tarjeta `CU-cc` (D-82); `R-xx`, una regla de autocorrección de `autocorreccion.md`.
 - Anotaciones de tipo en todas las funciones, métodos y estructuras de datos públicas (D-16).
 - Al terminar cada tarea, resumen de 5-10 líneas: qué se ha hecho, por qué, qué parte de `docs/contexto/` implementa y qué se ha supuesto. Lo supuesto va en «Preguntas abiertas».
 
 ## 3. Ponytail
 
 - Ponytail decide **cómo** implementar con el mínimo código, nunca **qué** se implementa.
-- No es trabajo que se pueda saltar, aunque parezca redundante: lo que exige `docs/contexto/` (validaciones del esquema, reglas AC-xx, transiciones, reintentos, ABORTAR, registro de coerciones y sus tests), ni la actualización de `docs/latex/` de cada funcionalidad (§9).
+- No es trabajo que se pueda saltar, aunque parezca redundante: lo que exige `docs/contexto/` (validaciones del esquema, reglas R-xx, transiciones, reintentos, ABORTAR, registro de coerciones y sus tests), ni la actualización de `docs/latex/` de cada funcionalidad (§9).
 - Si Ponytail y `docs/contexto/` chocan, manda `docs/contexto/`. Si crees que la especificación sobra, pregúntalo; no la recortes.
 - El `revisor` y el `explorador` trabajan sin Ponytail (`PONYTAIL_SUBAGENT_MATCHER` en `.claude/settings.json`). `ponytail-review` juzga si sobra código; el `revisor`, si cumple `docs/contexto/`.
 
@@ -108,7 +108,7 @@ Si no hay CU, se cita el tema de la rama.
    3. Máquina de estados de la sesión.
    4. Orquestador: bucle pull, reintentos por turno, fallback ABORTAR, estado externalizado.
    5. Adaptador A2A.
-   6. Agentes LangGraph de las empresas.
+   6. Agentes LangGraph de las partes: vendedor y comprador, con su coordinador y su negociador por sesión (D-75, D-80). Orquestador como servidor A2A del coordinador (D-87).
    7. Tests de extremo a extremo con agentes simulados.
 5. Tests y lint completos.
 6. `ponytail-review` sobre el diff (§3).
@@ -177,6 +177,7 @@ No toma decisiones de diseño nuevas: las plantea al desarrollador.
   - reintentos por turno y fallback ABORTAR;
   - persistencia del estado externalizado;
   - comunicación A2A (autenticación, endpoints, tiempos de espera);
+  - peticiones del comprador: `OPEN_ROUND`, `RESOLVE_HOLDS`, rechazos, duplicados y sus Tasks (D-87 a D-89, D-97, D-98);
   - gestión de secretos y configuración de proveedores de modelos.
 - **Salida:** hallazgos con fichero, línea, gravedad (bloqueante / mejora) y regla afectada. Si no hay ninguno, «Sin hallazgos».
 
@@ -223,5 +224,5 @@ Cada nivel se intenta una sola vez. No se repite la misma consulta al mismo mode
 
 Casos especiales:
 
-- **Error de cuota (HTTP 429):** no se escala a otro modelo externo. El Orquestador espera o hace la tarea él mismo, y avisa si se repite.
+- **Error de cuota (HTTP 429) o alta demanda (HTTP 503):** no se escala a otro modelo externo. El Orquestador espera o hace la tarea él mismo, y avisa si se repite.
 - **Resumen final:** se menciona cada escalado, para saber qué modelo hizo qué.
