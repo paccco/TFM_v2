@@ -22,7 +22,57 @@ CREATE TABLE IF NOT EXISTS sesiones (
     turn                integer,
     attempt             integer,
     message_id          text,             -- D-66
-    failed_party_id     text              -- D-99
+    failed_party_id     text,             -- D-99
+    urls_servicio       jsonb,            -- partyId → URL JSON-RPC (D-131)
+    context_ids         jsonb NOT NULL DEFAULT '{}', -- partyId → contextId (D-20)
+    task_id             text,             -- intento en curso, solo en AWAITING_TASK (D-58)
+    inicio_intento      timestamptz,      -- D-52, D-65
+    oferta_vigente      jsonb,
+    emisor_oferta       text,
+    oferta_acordada     jsonb,            -- HELD (D-42, D-84)
+    held_until          timestamptz,      -- D-86
+    envios_agreement    jsonb,            -- partyId → PENDIENTE (D-85)
+    resultado           jsonb,            -- desde CLOSING (D-53, D-82)
+    envios_close        jsonb             -- partyId → PENDIENTE (D-64)
+);
+
+-- Registros de solo añadir (`maquina-estados.md` §3), con el reloj de la base de datos (D-69).
+CREATE TABLE IF NOT EXISTS actos_aceptados (
+    id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id uuid NOT NULL REFERENCES sesiones,
+    turn       integer NOT NULL,
+    emisor     text NOT NULL,
+    tipo       text NOT NULL,
+    oferta     jsonb,
+    reason     text,
+    task_id    text NOT NULL,
+    instante   timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS fallos (
+    id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id uuid NOT NULL REFERENCES sesiones,
+    turn       integer NOT NULL,
+    attempt    integer NOT NULL,
+    task_id    text,
+    code       text NOT NULL,
+    field      text NOT NULL,
+    instante   timestamptz NOT NULL
+);
+
+-- Sin uso en v0.1.0, que solo admite STRICT (D-11): lo llena feature/autocorreccion.
+CREATE TABLE IF NOT EXISTS coerciones (
+    id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id uuid NOT NULL REFERENCES sesiones,
+    turn       integer NOT NULL,
+    attempt    integer NOT NULL,
+    task_id    text NOT NULL,
+    code       text NOT NULL,
+    field      text NOT NULL,
+    original   jsonb,
+    corregido  jsonb,
+    decision   text NOT NULL,                -- R-xx (D-123)
+    instante   timestamptz NOT NULL
 );
 
 -- Tasks de las peticiones del comprador (D-97, D-127), con la identidad que las creó (D-128).

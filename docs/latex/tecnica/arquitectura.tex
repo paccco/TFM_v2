@@ -1,6 +1,6 @@
 \chapter{Arquitectura}
 
-Este capítulo recoge el stack y los componentes implementados del orquestador. Por ahora cubren la apertura de una ronda (CU-04); los turnos están pendientes de implementar.
+Este capítulo recoge el stack y los componentes implementados del orquestador. Por ahora cubren la apertura de una ronda (CU-04) y los turnos de la negociación (CU-01 y CU-03).
 
 \section{Stack}
 
@@ -35,7 +35,10 @@ Los tests de \texttt{tests/test\_setup.py} usan PostgreSQL real, sin simulacione
   \texttt{peticiones.py} & Valida la forma, el sobre, el cuerpo y la configuración de una petición. Es una función pura: no usa la base de datos ni la red. \\
   \texttt{almacen.py} y \texttt{esquema.sql} & Conexión a PostgreSQL, tablas y lectura de las Tasks. \\
   \texttt{rondas.py} & Escribe la aceptación o el rechazo, comprueba las AgentCards y saca cada sesión de \texttt{CREATED}. \\
-  \texttt{servidor.py} & Manejador A2A, autenticación y AgentCard del orquestador. \\
+  \texttt{servidor.py} & Manejador A2A, autenticación y AgentCard del orquestador. Lanza la negociación de cada sesión tras comprobar las AgentCards. \\
+  \texttt{actos.py} & Valida el acto de una Task en modo estricto (pasos 6 a 9 de CU-01 y CU-03). Es una función pura. \\
+  \texttt{cliente\_agentes.py} & Cliente JSON-RPC hacia los agentes de las partes, con los números exactos (D-130). \\
+  \texttt{turnos.py} & Bucle de turnos de una sesión: envío, sondeo, validación y transiciones (capítulo «Flujo de una sesión»). \\
 \end{tabular}
 
 \section{Apertura de una ronda}
@@ -53,7 +56,7 @@ Un \texttt{OPEN\_ROUND} (CU-04) recorre estos pasos:
 
 Cada salida de \texttt{CREATED} escribe también el registro de petición, de forma condicional por versión (D-63). Dos salidas a la vez chocan en esa fila y la que pierde repite la transacción, ya viendo la otra sesión fuera de \texttt{CREATED}. Por eso la Task se completa una sola vez.
 
-Pendiente de implementar: ninguna pieza procesa aún una sesión en \texttt{READY} (\texttt{feature/turnos}), ni recoge las sesiones de una instancia caída (\texttt{feature/recuperacion}).
+Después, cada sesión en \texttt{NEGOTIATING} negocia en su propia tarea de fondo, que la respuesta no espera (D-94). Pendiente de implementar: ninguna pieza recoge aún las sesiones de una instancia caída (\texttt{feature/recuperacion}).
 
 \section{Tasks de las peticiones del comprador}
 

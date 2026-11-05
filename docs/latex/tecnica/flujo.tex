@@ -1,0 +1,65 @@
+\chapter{Flujo de una sesión}
+
+Este capítulo sigue una sesión desde que sale de \texttt{CREATED} hasta que deja de negociar. Lo implementa \texttt{turnos.py}, con el cliente de \texttt{cliente\_agentes.py}.
+
+\section{Arranque}
+
+Tras comprobar las AgentCards de una ronda, el manejador lanza la negociación de cada sesión en una tarea de fondo (CU-04). Cada sesión empieza en cuanto termina su propia comprobación, sin esperar a las demás, y un fallo al comprobar una no detiene al resto. La respuesta a \texttt{OPEN\_ROUND} no espera a la negociación (D-94). Una sesión en \texttt{NOT\_STARTED} no negocia.
+
+\section{Un turno}
+
+\begin{verbatim}
+Orquestador                PostgreSQL                 Agente
+    | toma la sesión            |                         |
+    |-------------------------->| arrendamiento, instante |
+    | SendMessage(TURN_REQUEST) |                         |
+    |---------------------------------------------------->|
+    |<----------------------------------------------------| Task
+    | taskId, contextId, inicio |                         |
+    |-------------------------->| AWAITING_TASK           |
+    | cada pollIntervalSeconds: |                         |
+    |-------------------------->| renueva, tiempo restante|
+    | GetTask                   |                         |
+    |---------------------------------------------------->|
+    |<----------------------------------------------------| Task
+    | valida el acto (memoria)  |                         |
+    | transición                |                         |
+    |-------------------------->| acto o fallos + estado  |
+\end{verbatim}
+
+\begin{enumerate}
+  \item \textbf{Tomar la sesión.} Una escritura condicionada a la instancia y a \texttt{NEGOTIATING} renueva el arrendamiento y devuelve el instante de inicio del intento.
+  \item \textbf{Enviar.} \texttt{SendMessage} a la parte con turno, con \texttt{returnImmediately = true} (D-58). La parte que abre tiene los turnos impares (D-33). El tiempo del turno cuenta desde aquí (D-52).
+  \item \textbf{Guardar la Task.} Su \texttt{taskId}, el instante de inicio y, si la parte aún no lo tenía, su \texttt{contextId}. Se guardan antes de sondear, para que otra instancia pueda seguir la misma Task.
+  \item \textbf{Sondear.} Cada \texttt{pollIntervalSeconds} se renueva el arrendamiento y se consulta la Task con \texttt{GetTask} (D-59, D-65). El tiempo restante se mide con el reloj de PostgreSQL. Si la Task ya llegó en estado final, no se sondea.
+  \item \textbf{Validar} el acto de la Task completada: Artifact, sobre, encaje y cuerpo (pasos 6 a 9 de CU-01 y CU-03).
+  \item \textbf{Escribir la transición} (capítulo «Máquina de estados»). Si la sesión sigue en \texttt{READY}, empieza el turno siguiente.
+\end{enumerate}
+
+\section{Fallos de un intento}
+
+\begin{tabular}{p{6.5cm}p{4.5cm}l}
+  \textbf{Situación} & \textbf{Fallo} & \textbf{\texttt{CancelTask}} \\
+  Sin respuesta de \texttt{SendMessage} a tiempo & \texttt{TURN\_TIMEOUT}, sin \texttt{taskId} & No \\
+  Error de red o de HTTP en \texttt{SendMessage} & \texttt{AGENT\_UNREACHABLE} & No \\
+  Error A2A en \texttt{SendMessage} & \texttt{AGENT\_ERROR} (D-71) & No \\
+  Respuesta con un Message & \texttt{MISSING\_ACT} (D-62) & No \\
+  Tiempo agotado durante el sondeo & \texttt{TURN\_TIMEOUT} & Sí \\
+  \texttt{TaskNotFoundError} en \texttt{GetTask} & \texttt{MISSING\_ACT} (D-68) & No \\
+  Task en \texttt{FAILED}, \texttt{REJECTED} o \texttt{CANCELED} & \texttt{TASK\_FAILED}, \texttt{TASK\_REJECTED} o \texttt{TASK\_CANCELED} & No \\
+  Task en \texttt{INPUT\_REQUIRED}, \texttt{AUTH\_REQUIRED} u otro estado & \texttt{TASK\_INTERRUPTED} (D-60) & Sí \\
+  Acto no válido & Los fallos de la validación, en orden (D-61) & No \\
+\end{tabular}
+
+Todos llevan \texttt{field = task}, salvo los del acto, que señalan su campo. Un error de red en \texttt{GetTask} no hace fallar el intento: se sigue sondeando hasta agotar el tiempo. \texttt{CancelTask} se envía sin esperar respuesta.
+
+Un error A2A en \texttt{GetTask} distinto de \texttt{TaskNotFoundError} no está en la especificación. Mientras no se decida, se trata como un error de red.
+
+Un agente hecho con \texttt{a2a-sdk} que publica la Task sin estado la deja en \texttt{TASK\_STATE\_UNSPECIFIED}. Cuenta como estado desconocido: \texttt{TASK\_INTERRUPTED}. El agente debe publicarla en \texttt{TASK\_STATE\_SUBMITTED}.
+
+\section{Pendiente}
+
+\begin{itemize}
+  \item Retomar una sesión de una instancia caída (\texttt{feature/recuperacion}). Lo que se guarda ya lo permite: en \texttt{READY} se reenvía el mismo \texttt{messageId}, y en \texttt{AWAITING\_TASK} se sigue sondeando la misma Task con el tiempo que le queda.
+  \item Enviar \texttt{AGREEMENT\_HELD} y \texttt{SESSION\_CLOSE} (\texttt{feature/agreement-held}, \texttt{feature/cierre-sesion}).
+\end{itemize}

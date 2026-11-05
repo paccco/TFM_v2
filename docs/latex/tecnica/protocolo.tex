@@ -1,6 +1,6 @@
 \chapter{Protocolo}
 
-Este capítulo explica lo implementado del protocolo. Por ahora, las peticiones del comprador. Los actos y el turno están pendientes de implementar.
+Este capítulo explica lo implementado del protocolo: las peticiones del comprador y los turnos con los agentes de las partes. Los mensajes \texttt{AGREEMENT\_HELD} y \texttt{SESSION\_CLOSE} están pendientes de implementar.
 
 \section{Peticiones del comprador}
 
@@ -56,3 +56,56 @@ Una petición con fallos no crea nada: la Task termina en \texttt{TASK\_STATE\_R
 \end{tabular}
 
 El mensaje de estado lleva un sobre con \texttt{sender = ORCHESTRATOR}. Si no se pudo leer un \texttt{type} de petición válido, va sin sobre, porque no hay un valor correcto que poner (D-106).
+
+\section{Turnos con los agentes}
+
+En cada turno, el orquestador es cliente A2A del agente de la parte con turno (D-05, D-06). Le pide un acto con un \texttt{TURN\_REQUEST} y el agente lo devuelve en el Artifact de una Task. El flujo completo está en el capítulo «Flujo de una sesión».
+
+\subsection{\texttt{TURN\_REQUEST}}
+
+Va en el Message de \texttt{SendMessage}, con \texttt{role = ROLE\_USER}, la URI de la extensión en \texttt{extensions} y en la cabecera \texttt{A2A-Extensions}, y \texttt{returnImmediately = true} (D-58). Lleva todo lo que el agente necesita, porque el agente no guarda nada de la sesión (D-46). Este es el del turno 2:
+
+\begin{verbatim}
+metadata["urn:tfm:negociacion:v1"]:
+  { "sessionId": "...", "turn": 2,
+    "type": "TURN_REQUEST", "sender": "ORCHESTRATOR" }
+
+Part data, con mediaType
+application/vnd.tfm.negociacion.control+json:
+  { "role": "SELLER",
+    "fixedTerms": { "productId": "p1", "unit": "kg",
+                    "currency": "EUR" },
+    "allowedActs": ["COUNTEROFFER", "ACCEPT", "WITHDRAW"],
+    "turnsLeft": 9, "attempt": 1,
+    "lastOffer": { "productId": "p1", "unit": "kg",
+                   "currency": "EUR", "quantity": 10,
+                   "unitPrice": 12.50, "deliveryDays": 30,
+                   "paymentDays": 60 } }
+\end{verbatim}
+
+En el turno 1, \texttt{allowedActs} es \texttt{[PROPOSE, WITHDRAW]} y no hay \texttt{lastOffer} (D-47). \texttt{turnsLeft} cuenta el turno actual: \texttt{maxTurns − turn + 1}. El \texttt{messageId} es el guardado para el intento (D-66). El \texttt{contextId} solo va desde el segundo turno de cada parte: en el primero, el orquestador guarda el que devuelve el agente (D-20).
+
+\subsection{El acto}
+
+El agente responde con una Task que, al completarse, lleva un solo Artifact con una sola Part \texttt{data} de \texttt{mediaType} \texttt{application/vnd.tfm.negociacion.acto+json} (D-19, D-23). El sobre del Artifact devuelve el \texttt{sessionId} y el \texttt{turn} recibidos, con el tipo del acto y su \texttt{partyId} como \texttt{sender} (D-28, D-30):
+
+\begin{verbatim}
+metadata["urn:tfm:negociacion:v1"]:
+  { "sessionId": "...", "turn": 2,
+    "type": "COUNTEROFFER", "sender": "vendedor-1" }
+
+Part data:
+  { "offer": { ..., "unitPrice": 11.75, ... } }
+\end{verbatim}
+
+La validación es siempre estricta en esta versión (D-11): cualquier fallo de R-01 a R-17 se registra sin corregir y aborta la sesión.
+
+\subsection{Números exactos}
+
+El precio es un decimal exacto (D-37). Los tipos de \texttt{a2a-sdk} guardan los números como coma flotante y perderían cifras, así que el orquestador usa su propio cliente JSON-RPC (D-130). Lee los decimales como \texttt{Decimal} y los escribe con todas sus cifras, tanto hacia el agente como en PostgreSQL.
+
+Por la misma razón, un agente hecho con el SDK envía el entero 10 como 10.0. En los campos enteros (\texttt{turn}, \texttt{quantity}, \texttt{deliveryDays} y \texttt{paymentDays}), un número con parte decimal nula vale como entero, sin coerción, y se reenvía como entero (D-132). Un entero de 4300 cifras o más es \texttt{OUT\_OF\_RANGE}: no se llega a convertir, porque eso agotaría la memoria del orquestador (D-133).
+
+\subsection{Cabeceras y métodos}
+
+El cliente llama a \texttt{SendMessage}, \texttt{GetTask} y \texttt{CancelTask} por JSON-RPC, con las cabeceras \texttt{A2A-Extensions: urn:tfm:negociacion:v1} y \texttt{A2A-Version: 1.0}. Sin la segunda, un servidor hecho con el SDK supone la versión 0.3 del protocolo. No sigue redirecciones: la URL que llama es la de la AgentCard, ya comprobada contra los orígenes permitidos (D-129, D-131).

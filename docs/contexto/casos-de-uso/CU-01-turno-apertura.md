@@ -85,7 +85,7 @@ Los pasos 8 y 9 siguen el orden de D-72. Para elegir `lastFailure`, los fallos s
 - [ ] AC-01-30 · En ambos modos: un `WITHDRAW` con `reason` que no es cadena provoca reintento con `WRONG_TYPE` en `body.reason` (R-15).
 - [ ] AC-01-31 · Tolerante: un `turn` numérico distinto del estado se sustituye por el del estado, con coerción registrada (R-02).
 - [ ] AC-01-32 · Tolerante: `currency = "eur"` se normaliza a `EUR`, con coerción registrada (R-09).
-- [ ] AC-01-33 · Tolerante: `quantity = "10"` y `quantity = 10.0` se convierten a 10, con coerción registrada (R-11).
+- [ ] AC-01-33 · Tolerante: `quantity = "10"` se convierte a 10, con coerción registrada (R-11). En ambos modos, `quantity = 10.0` se acepta como 10, sin coerción (D-132).
 - [ ] AC-01-34 · Tolerante: `deliveryDays = "30"` y `paymentDays = "60"` se convierten a entero, con coerción registrada (R-12).
 - [ ] AC-01-35 · En ambos modos: un `type` ausente o que no se puede normalizar a un acto provoca reintento (R-17).
 

@@ -13,6 +13,7 @@ import httpx
 import psycopg
 from a2a.client.card_resolver import parse_agent_card
 from a2a.types.a2a_pb2 import Artifact, Message, Part, Role, Task, TaskState, TaskStatus
+from a2a.utils.constants import TransportProtocol
 from google.protobuf.json_format import ParseDict
 from google.protobuf.struct_pb2 import Value
 from psycopg.types.json import Jsonb
@@ -24,6 +25,7 @@ from orquestador.peticiones import (
     URI_EXTENSION,
     Origen,
     PeticionValidada,
+    origen,
     validar_peticion,
 )
 
@@ -191,35 +193,57 @@ async def comprobar_sesion(entorno: Entorno, session_id: str) -> None:
     plazo = config["turnTimeoutSeconds"]
     # D-99: el único tiempo máximo es el de `_agentcard_correcta`. D-129: sin redirecciones.
     async with httpx.AsyncClient(follow_redirects=False, timeout=None) as cliente:
-        correctas = await asyncio.gather(
+        urls = await asyncio.gather(
             *[
-                _agentcard_correcta(cliente, parte["agentCardUrl"], plazo)
+                _url_de_servicio(
+                    cliente, parte["agentCardUrl"], plazo, entorno.origenes
+                )
                 for parte in config["parties"]
             ]
         )
     # D-99: si fallan las dos, la primera según el orden de `parties`.
     fallida = next(
-        (p["partyId"] for p, ok in zip(config["parties"], correctas) if not ok), None
+        (p["partyId"] for p, url in zip(config["parties"], urls) if url is None), None
     )
-    await _salir_de_created(entorno, session_id, version, fallida)
+    servicio = {p["partyId"]: url for p, url in zip(config["parties"], urls)}
+    await _salir_de_created(entorno, session_id, version, fallida, servicio)
 
 
-async def _agentcard_correcta(cliente: httpx.AsyncClient, url: str, plazo: int) -> bool:
-    """D-25, D-99: un intento; cualquier fallo al obtenerla o interpretarla cuenta como fallo."""
+async def _url_de_servicio(
+    cliente: httpx.AsyncClient, url: str, plazo: int, origenes: frozenset[Origen]
+) -> str | None:
+    """URL JSON-RPC de la parte, o None si su AgentCard no es válida (D-25, D-99, D-131).
+
+    Un intento; cualquier fallo al obtenerla o interpretarla cuenta como fallo.
+    """
     try:
         async with asyncio.timeout(plazo):
             respuesta = await cliente.get(url)
             respuesta.raise_for_status()
             tarjeta = parse_agent_card(respuesta.json())
     except Exception:  # noqa: BLE001 - D-99: cualquier fallo es «no se puede obtener»
-        return False
-    return any(
+        return None
+    if not any(
         e.uri == URI_EXTENSION and e.required for e in tarjeta.capabilities.extensions
-    )
+    ):
+        return None
+    jsonrpc = [
+        i.url
+        for i in tarjeta.supported_interfaces
+        if i.protocol_binding == TransportProtocol.JSONRPC
+    ]
+    # D-131: es la dirección que se llama de verdad, con el mismo límite que D-129.
+    if not jsonrpc or origen(jsonrpc[0]) not in origenes:
+        return None
+    return jsonrpc[0]
 
 
 async def _salir_de_created(
-    entorno: Entorno, session_id: str, version: int, fallida: str | None
+    entorno: Entorno,
+    session_id: str,
+    version: int,
+    fallida: str | None,
+    servicio: dict[str, str | None],
 ) -> None:
     """Transición de salida, con el registro de petición por versión (D-63, D-97).
 
@@ -229,25 +253,30 @@ async def _salir_de_created(
     while True:
         try:
             async with await conectar(entorno.dsn) as c:
-                await _transicion(c, session_id, version, fallida)
+                await _transicion(c, session_id, version, fallida, servicio)
             return
         except _PeticionCambiada:
             continue
 
 
 async def _transicion(
-    c: psycopg.AsyncConnection[Any], session_id: str, version: int, fallida: str | None
+    c: psycopg.AsyncConnection[Any],
+    session_id: str,
+    version: int,
+    fallida: str | None,
+    servicio: dict[str, str | None],
 ) -> None:
     if fallida is None:
         cursor = await c.execute(
             f"""
             UPDATE sesiones
             SET estado = 'NEGOTIATING', subestado = 'READY', turn = 1, attempt = 1,
-                message_id = %s, version = version + 1, arrendamiento_hasta = {FIN_ARRENDAMIENTO}
+                message_id = %s, urls_servicio = %s, version = version + 1,
+                arrendamiento_hasta = {FIN_ARRENDAMIENTO}
             WHERE session_id = %s AND version = %s
             RETURNING request_id, ronda
             """,
-            (str(uuid4()), session_id, version),
+            (str(uuid4()), Jsonb(servicio), session_id, version),
         )
     else:
         cursor = await c.execute(

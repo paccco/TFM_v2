@@ -1,0 +1,73 @@
+\chapter{Máquina de estados}
+
+Este capítulo explica los estados por los que pasa una sesión y lo que se guarda en cada uno. La definición completa está en \texttt{docs/contexto/maquina-estados.md}. Aquí solo se describe lo implementado: la apertura (CU-04) y los turnos (CU-01 y CU-03).
+
+\section{Estados de la sesión}
+
+\begin{verbatim}
+            OPEN_ROUND aceptado
+                    |
+                    v
+                 CREATED ----------------> NOT_STARTED
+                    |   AgentCard no válida   (final)
+                    |   AgentCards válidas
+                    v
+   +---------> NEGOTIATING
+   |  PROPOSE o     |   |   |
+   |  COUNTEROFFER  |   |   +-- WITHDRAW, COUNTEROFFER del último
+   +----------------+   |       turno o primer fallo --> CLOSING
+     (turn + 1)         |
+                        +-- ACCEPT --> HELD
+\end{verbatim}
+
+\begin{tabular}{p{3cm}p{10.5cm}}
+  \textbf{Estado} & \textbf{Significado} \\
+  \texttt{CREATED} & Sesión creada por un \texttt{OPEN\_ROUND}; faltan por comprobar las AgentCards. \\
+  \texttt{NOT\_STARTED} & Alguna AgentCard no se pudo obtener o no es válida (D-99, D-131). Es final. \\
+  \texttt{NEGOTIATING} & Hay un turno en curso, en \texttt{READY} o en \texttt{AWAITING\_TASK}. \\
+  \texttt{HELD} & Un \texttt{ACCEPT} dejó un acuerdo provisional sobre la oferta vigente (D-77, D-84). \\
+  \texttt{CLOSING} & El resultado está decidido y guardado. Falta avisar a las partes con \texttt{SESSION\_CLOSE}. \\
+\end{tabular}
+
+\texttt{CLOSED}, la salida de \texttt{HELD} y los envíos de \texttt{AGREEMENT\_HELD} y \texttt{SESSION\_CLOSE} están pendientes de implementar. Por ahora, una sesión se queda en \texttt{HELD} o en \texttt{CLOSING} con esos envíos marcados como \texttt{PENDIENTE}.
+
+\section{Subestados del turno}
+
+\begin{tabular}{p{3cm}p{10.5cm}}
+  \textbf{Subestado} & \textbf{Qué hay guardado} \\
+  \texttt{READY} & \texttt{turn}, \texttt{attempt} y el \texttt{messageId} del intento (D-66). Aún no se ha llamado al agente. \\
+  \texttt{AWAITING\_TASK} & Además, el \texttt{taskId} que se sondea, el instante de inicio del intento y el \texttt{contextId} de la parte (D-58). \\
+\end{tabular}
+
+Solo se guardan los puntos en los que el orquestador espera a la red. La validación del acto ocurre en memoria, y su resultado se escribe directamente como la transición siguiente.
+
+\section{Transiciones de un turno}
+
+\begin{tabular}{p{5cm}p{8.5cm}}
+  \textbf{Evento} & \textbf{Qué se escribe} \\
+  \texttt{PROPOSE} o \texttt{COUNTEROFFER} con \texttt{turn} < \texttt{maxTurns} & Acto aceptado; \texttt{turn + 1} en \texttt{READY}, \texttt{messageId} nuevo y la oferta como oferta vigente, con su emisor. \\
+  \texttt{COUNTEROFFER} en el último turno & Acto aceptado; \texttt{CLOSING} con \texttt{NO\_AGREEMENT} y \texttt{lastOffers}. La oferta vigente no cambia (D-54, D-57). \\
+  \texttt{ACCEPT} & Acto aceptado; \texttt{HELD} con la oferta vigente como oferta acordada y \texttt{heldUntil} = instante del acto + \texttt{holdTimeoutSeconds} (D-86). \\
+  \texttt{WITHDRAW} & Acto aceptado; \texttt{CLOSING} con \texttt{WITHDRAWN}, \texttt{withdrawnBy}, \texttt{reason} si la hay y \texttt{lastOffers} (D-82). \\
+  Fallo del intento & Cada fallo al registro; \texttt{CLOSING} con \texttt{ABORTED}, \texttt{abortReason = RETRIES\_EXHAUSTED}, \texttt{lastFailure} y \texttt{lastOffers} (D-07, D-53, D-61). \\
+\end{tabular}
+
+\texttt{lastOffers} es la última oferta aceptada de cada parte que llegó a ofertar, sacada del registro de actos aceptados. Incluye el \texttt{COUNTEROFFER} del último turno. Si nadie ofertó, no aparece (D-82).
+
+En esta versión, \texttt{maxRetries} es siempre 0, así que el primer fallo agota los reintentos y aborta la sesión. El reintento con \texttt{attempt + 1} y \texttt{retryReason} está pendiente de implementar (\texttt{feature/reintentos-aborto}).
+
+\section{Tablas}
+
+\begin{tabular}{p{3.5cm}p{10cm}}
+  \textbf{Tabla} & \textbf{Contenido} \\
+  \texttt{sesiones} & Un registro por sesión, que se reescribe en cada transición. \\
+  \texttt{actos\_aceptados} & Un acto por turno resuelto: \texttt{turn}, emisor, tipo, oferta o \texttt{reason}, \texttt{taskId} e instante. Solo se añade. \\
+  \texttt{fallos} & Un fallo por fila: \texttt{turn}, \texttt{attempt}, \texttt{taskId} si lo hay, \texttt{code}, \texttt{field} e instante. Solo se añade. \\
+  \texttt{coerciones} & Creada y vacía: solo se llena en modo tolerante, que aún no está implementado. \\
+\end{tabular}
+
+Cada transición escribe el registro de sesión y sus filas de registro en una sola transacción (D-63, D-69). Todos los instantes los da el reloj de PostgreSQL.
+
+\section{Concurrencia}
+
+Una instancia solo trabaja con una sesión si tiene su arrendamiento (D-63, D-65). Lo renueva al tomar la sesión, en cada sondeo y en cada transición. Cada escritura exige que la versión del registro y la instancia sean las que leyó. Si otra instancia ha escrito antes, la escritura no afecta a ninguna fila y la instancia abandona la sesión sin escribir nada más.

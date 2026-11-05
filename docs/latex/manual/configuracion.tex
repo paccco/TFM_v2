@@ -52,5 +52,31 @@ El coordinador envía una configuración por partida en \texttt{OPEN\_ROUND}:
   \item Un \texttt{maxRetries} distinto de 0 se rechaza con \texttt{INVALID\_CONFIG}. Como su valor por defecto es 2, hay que enviar 0 de forma explícita.
   \item Un \texttt{OPEN\_ROUND} con \texttt{requestId} se rechaza con \texttt{UNKNOWN\_REQUEST}: solo se admite la primera ronda.
   \item Reenviar una petición con el mismo \texttt{messageId} devuelve un error A2A, en lugar de la Task original. No se escribe nada.
-  \item Las sesiones se quedan en \texttt{NEGOTIATING} tras comprobar las AgentCards: la negociación aún no está implementada.
+  \item El primer fallo de un agente aborta la sesión: un acto no válido, una Task fallida, un tiempo agotado o un agente que no responde. No hay reintentos.
+  \item Las partes aún no reciben \texttt{AGREEMENT\_HELD} ni \texttt{SESSION\_CLOSE}. Una sesión se queda en \texttt{HELD} o en \texttt{CLOSING}, y su resultado solo se ve en la base de datos.
 \end{itemize}
+
+\section{Resultado de una sesión}
+
+Mientras no se envía \texttt{SESSION\_CLOSE}, el resultado se lee en la tabla \texttt{sesiones}: la columna \texttt{estado} y, en \texttt{CLOSING}, la columna \texttt{resultado}.
+
+\begin{tabular}{lp{9cm}}
+  \textbf{\texttt{outcome}} & \textbf{Qué ha pasado} \\
+  \texttt{WITHDRAWN} & Una parte se retiró. \texttt{withdrawnBy} dice cuál. \\
+  \texttt{NO\_AGREEMENT} & Se agotaron los turnos sin acuerdo. \\
+  \texttt{ABORTED} & Un agente falló. \texttt{lastFailure} dice el primer fallo, con su código y su campo. \\
+\end{tabular}
+
+En los tres casos, \texttt{lastOffers} recoge la última oferta de cada parte que llegó a ofertar. Una sesión en \texttt{HELD} tiene un acuerdo provisional: su oferta está en \texttt{oferta\_acordada} y su plazo en \texttt{held\_until}. Los fallos, uno por fila, están en la tabla \texttt{fallos}, y los actos aceptados, en \texttt{actos\_aceptados}.
+
+Ante \texttt{TASK\_INTERRUPTED} con un agente hecho con \texttt{a2a-sdk}, comprueba que el agente publica su Task en \texttt{TASK\_STATE\_SUBMITTED}: una Task sin estado cuenta como interrumpida.
+
+\section{Actualizar una base de datos ya creada}
+
+El orquestador crea las tablas que faltan al arrancar, pero no añade columnas a las que ya existen. Esta versión añade columnas a \texttt{sesiones} y las tablas \texttt{actos\_aceptados}, \texttt{fallos} y \texttt{coerciones}. Una base de desarrollo creada con una versión anterior hay que vaciarla:
+
+\begin{verbatim}
+docker compose down -v && docker compose up -d --wait
+\end{verbatim}
+
+Esto borra todos sus datos.

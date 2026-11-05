@@ -8,10 +8,12 @@ import httpx
 import psycopg
 import pytest
 
+from orquestador import servidor
 from orquestador.peticiones import MEDIA_PETICION, URI_EXTENSION, origen
 from orquestador.rondas import Entorno
 from orquestador.servidor import crear_app, leer_origenes, leer_tokens
 from tests.conftest import ServidorHttp, levantar
+from tests.test_turnos import TRABAJANDO, Agente, acto
 
 COMPRADOR = "comprador-1"
 TOKEN = "token-de-prueba-comprador"
@@ -157,13 +159,23 @@ def test_ac_04_28_sin_credencial_valida_401_y_nada_escrito(
 def test_camino_valido_sin_return_immediately_espera_al_resultado(
     dsn: str, orquestador: str, agentes: ServidorHttp
 ) -> None:
-    """Paso 7 de CU-04: sin `returnImmediately`, responde al completarse."""
+    """Paso 7 de CU-04: sin `returnImmediately`, responde al completarse.
+
+    D-94: no espera a la negociación, que empieza después de comprobar las AgentCards.
+    """
+    agentes.rpc = Agente(dsn, {1: [TRABAJANDO, acto("WITHDRAW")]})
     task = enviar(orquestador, open_round(config(agentes)))
     assert task["status"]["state"] == "TASK_STATE_COMPLETED"
     [parte] = task["artifacts"][0]["parts"]
     assert parte["data"]["sessions"][0]["started"] is True
     with psycopg.connect(dsn) as c:
         assert c.execute("SELECT estado FROM sesiones").fetchall() == [("NEGOTIATING",)]
+        for _ in range(50):
+            [(estado,)] = c.execute("SELECT estado FROM sesiones").fetchall()
+            if estado != "NEGOTIATING":
+                break
+            time.sleep(0.1)
+    assert estado == "CLOSING"
 
 
 def test_return_immediately_responde_enseguida_y_completa_despues(
@@ -297,3 +309,31 @@ def test_leer_origenes() -> None:
     for raro in ("a.test", "http://", "::"):
         with pytest.raises(ValueError, match="ORQUESTADOR_ORIGENES_AGENTES"):
             leer_origenes(raro)
+
+
+def test_d_63_un_fallo_al_comprobar_una_sesion_no_para_las_demas(
+    dsn: str, orquestador: str, agentes: ServidorHttp, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cada sesión negocia en cuanto sale de `CREATED`, falle o no la de al lado."""
+    original = servidor.comprobar_sesion
+    llamadas: list[str] = []
+
+    async def falla_la_primera(entorno: Entorno, session_id: str) -> None:
+        llamadas.append(session_id)
+        if len(llamadas) == 1:
+            raise RuntimeError("fallo simulado")
+        await original(entorno, session_id)
+
+    monkeypatch.setattr(servidor, "comprobar_sesion", falla_la_primera)
+    agentes.rpc = Agente(dsn, {1: [acto("WITHDRAW")]})
+    params = open_round(config(agentes))
+    sesiones = params["message"]["parts"][0]["data"]["sessions"]
+    sesiones.append({"itemId": "i1", "config": sesiones[0]["config"]})
+    enviar(orquestador, {**params, "configuration": {"returnImmediately": True}})
+    with psycopg.connect(dsn) as c:
+        for _ in range(50):
+            estados = sorted(e for (e,) in c.execute("SELECT estado FROM sesiones"))
+            if estados == ["CLOSING", "CREATED"]:
+                break
+            time.sleep(0.1)
+    assert estados == ["CLOSING", "CREATED"]

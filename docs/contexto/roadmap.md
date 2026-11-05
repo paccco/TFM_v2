@@ -57,7 +57,7 @@ Comprador con coordinador mínimo y vendedor, con estrategias fijas y sin LLM. D
 - **LaTeX:** `tecnica/` Arquitectura y Protocolo (peticiones del comprador y autenticación); `manual/` Configuración (tokens, orígenes, TLS y límites de v0.1.0).
 
 ### `feature/turnos`
-- **CU y AC:** CU-01 y CU-03, camino válido hasta `HELD`. AC-01-01, AC-01-02 (parte), AC-01-03, AC-01-15 (parte: `maxRetries = 0`), AC-03-01, AC-03-02, AC-03-03 (parte), AC-03-04, AC-03-06, AC-03-16.
+- **CU y AC:** CU-01 y CU-03, actos válidos hasta `HELD` o `CLOSING`. AC-01-01, AC-01-02 (parte), AC-01-03, AC-01-15 (parte: `maxRetries = 0`), AC-01-16, AC-03-01, AC-03-02, AC-03-03 (parte), AC-03-04, AC-03-05, AC-03-06, AC-03-07, AC-03-16.
 - **Depende de:** `feature/abrir-ronda`.
 - **Pruebas:** agente A2A de prueba con respuestas guionizadas, que comprueba cada `TURN_REQUEST` recibido, la paridad y el sondeo. Se comprueban las escrituras de cada transición en PostgreSQL. Aborto con `maxRetries = 0` ante un acto no válido, un fallo de Task y un tiempo agotado, en turno 1 y en turno ≥ 2.
 - **LaTeX:** `tecnica/` Protocolo (actos y turno), Máquina de estados y Flujo de una sesión.
@@ -91,7 +91,7 @@ Comprador con coordinador mínimo y vendedor, con estrategias fijas y sin LLM. D
 Cada rama de este hito añade su escenario extremo a extremo con agentes simulados.
 
 ### `feature/fin-sin-acuerdo`
-- **CU y AC:** CU-01 y CU-03. AC-01-16, AC-03-05, AC-03-07.
+- **CU y AC:** ningún criterio nuevo; escenarios de extremo a extremo de AC-01-16, AC-03-05 y AC-03-07, implementados en `feature/turnos`.
 - **Depende de:** H1.
 - **Pruebas:** `WITHDRAW` en el turno 1 y en un turno ≥ 2; `COUNTEROFFER` en el último turno. Se comprueba el `SESSION_CLOSE` resultante.
 - **LaTeX:** `tecnica/` Máquina de estados; `manual/` Leer el resultado.

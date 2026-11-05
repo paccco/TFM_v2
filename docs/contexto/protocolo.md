@@ -361,7 +361,8 @@ No se usan Parts `text`, `raw` ni `url` en el protocolo.
 
 ### Precondición de sesión (D-25, D-99)
 La sesión solo se inicia si la AgentCard de ambos agentes se puede
-obtener y declara la extensión con `required = true`. Si no, queda en
+obtener, declara la extensión con `required = true` y ofrece una interfaz
+JSON-RPC con un origen permitido (D-131). Si no, queda en
 `NOT_STARTED`, sin `SESSION_CLOSE` (`maquina-estados.md`, sección 1). El
 coordinador lo sabe por el resultado de `OPEN_ROUND`.
 
