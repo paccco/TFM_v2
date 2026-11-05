@@ -7,7 +7,7 @@ Tasks en la transacción de las sesiones (D-97, D-127). Delante va la autenticac
 import asyncio
 import hmac
 import logging
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Coroutine
 from typing import Any
 
 from a2a.server.context import ServerCallContext
@@ -51,6 +51,7 @@ from orquestador.peticiones import (
     origen,
 )
 from orquestador.rondas import Entorno, comprobar_sesion, recibir_peticion
+from orquestador.turnos import negociar
 
 logger = logging.getLogger(__name__)
 
@@ -74,9 +75,7 @@ class Manejador(RequestHandler):
         )
         if not recepcion.sesiones:
             return recepcion.task
-        tarea = asyncio.create_task(self._comprobar(recepcion.sesiones))
-        self._en_curso.add(tarea)
-        tarea.add_done_callback(self._en_curso.discard)
+        tarea = self._lanzar(self._comprobar(recepcion.sesiones))
         if params.configuration.return_immediately:
             return recepcion.task
         await asyncio.shield(tarea)
@@ -91,6 +90,25 @@ class Manejador(RequestHandler):
             )
         except Exception:
             logger.exception("Fallo al comprobar las AgentCards de una ronda")
+            return
+        # D-94: la respuesta no espera a la negociación. Las sesiones en `NOT_STARTED` no
+        # negocian: `negociar` solo toma las que siguen en `NEGOTIATING`.
+        for s in sesiones:
+            self._lanzar(self._negociar(s))
+
+    async def _negociar(self, session_id: str) -> None:
+        """CU-01 y CU-03. Si algo falla, la sesión queda guardada para otra instancia (D-63)."""
+        try:
+            await negociar(self._entorno, session_id)
+        except Exception:
+            logger.exception("Fallo al negociar la sesión %s", session_id)
+
+    def _lanzar(self, trabajo: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
+        """Guarda la referencia mientras dura, para que no se pierda la tarea."""
+        tarea = asyncio.create_task(trabajo)
+        self._en_curso.add(tarea)
+        tarea.add_done_callback(self._en_curso.discard)
+        return tarea
 
     async def on_get_task(
         self, params: GetTaskRequest, context: ServerCallContext
