@@ -907,3 +907,20 @@ Decisiones tomadas al implementar D-87 en `feature/abrir-ronda`.
 - **Decisión:** el origen (esquema, host y puerto) de cada `agentCardUrl` debe estar en una lista fijada en el despliegue. Si no lo está, la ronda se rechaza con `INVALID_CONFIG` en `body.sessions.<i>.config.parties.<j>.agentCardUrl` y no se hace ninguna petición de red. Una redirección no se sigue: cuenta como AgentCard que no se puede obtener (D-99). Precisa D-90 y D-99.
 - **Motivo:** el orquestador hace un GET a una dirección que recibe del cliente. Sin límite, se le podría usar para sondear servicios internos.
 - **Descartado:** dejar la sesión en `NOT_STARTED` para un origen no permitido, porque un error de configuración parecería un fallo del agente; bloquear redes privadas, porque es vulnerable a DNS rebinding y obliga a una excepción en desarrollo local. No es el registro de partes que descarta D-90: no da de alta partes, solo orígenes.
+- **Precisada por D-131.**
+
+## Cliente A2A del orquestador
+
+Decisiones tomadas al implementar CU-01 y CU-03 en `feature/turnos`.
+
+### D-130 · Cliente JSON-RPC propio hacia los agentes
+- **Fecha:** 2026-11
+- **Decisión:** el orquestador llama a los agentes con `httpx` y JSON-RPC propio, y lee las respuestas con los números sin pasar por coma flotante.
+- **Motivo:** los tipos protobuf de `a2a-sdk` 1.3.0 no distinguen 10 de 10.0 ni conservan todos los decimales, y eso incumple R-11 y D-37.
+- **Descartado:** el cliente de `a2a-sdk`, porque obligaría a cambiar R-11 y D-37.
+
+### D-131 · URL de servicio de los agentes
+- **Fecha:** 2026-11
+- **Decisión:** al comprobar la AgentCard, una parte también falla si no ofrece una interfaz JSON-RPC o si el origen de su URL no está en la lista de D-129. La sesión queda en `NOT_STARTED`. La URL válida se guarda en el registro de sesión y no se vuelve a pedir la tarjeta. Precisa D-99 y D-129.
+- **Motivo:** esa es la dirección que se llama de verdad. Sin límite, un agente podría dirigir al orquestador a un servicio interno. Guardarla permite retomar la sesión desde otra instancia.
+- **Descartado:** releer la tarjeta antes de cada envío; no comprobar el origen.

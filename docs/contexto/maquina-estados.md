@@ -30,7 +30,7 @@ Vocabulario: «parte» es cada participante de una sesión, comprador o vendedor
 |---|---|---|---|
 | — | `OPEN_ROUND` aceptado (D-88) | `CREATED` | `sessionId` (D-67), `requestId`, ronda, `itemId` y valores efectivos de la configuración (D-91) |
 | `CREATED` | Ambas AgentCards se obtienen y declaran la extensión (D-99) | `NEGOTIATING` (`READY`) | `turn = 1`, `attempt = 1`, `messageId` del intento (D-66) |
-| `CREATED` | Alguna AgentCard no la declara o no se puede obtener (D-99) | `NOT_STARTED` | `failedPartyId`: la parte que falló o, si fallan las dos, la primera según el orden de `parties` |
+| `CREATED` | Alguna AgentCard no la declara, no se puede obtener o su URL de servicio no es válida (D-99, D-131) | `NOT_STARTED` | `failedPartyId`: la parte que falló o, si fallan las dos, la primera según el orden de `parties` |
 | `NEGOTIATING` | `PROPOSE` o `COUNTEROFFER` aceptado y `turn < maxTurns` | `NEGOTIATING` (`READY`) | `turn + 1`, `attempt = 1`, nuevo `messageId`, nueva oferta vigente con su emisor |
 | `NEGOTIATING` | `COUNTEROFFER` aceptado y `turn = maxTurns` | `CLOSING` | `outcome = NO_AGREEMENT` y `lastOffers` (D-54, D-57, D-82) |
 | `NEGOTIATING` | `ACCEPT` aceptado | `HELD` | Oferta acordada = oferta vigente (D-42), `heldUntil` = ahora + `holdTimeoutSeconds` (D-86), envío de `AGREEMENT_HELD` pendiente a cada parte (D-85) |
@@ -120,7 +120,7 @@ Uno por sesión; se reescribe en cada transición.
 | Concurrencia | Versión del registro, instancia que tiene el arrendamiento y su caducidad (D-63) | Siempre; el arrendamiento, mientras una instancia procesa la sesión |
 | Estado | Estado de sesión (sección 1), subestado del turno (sección 2) | El subestado, solo en `NEGOTIATING` |
 | Turno | `turn`, `attempt`, `messageId` del intento | Desde `NEGOTIATING` |
-| A2A | `contextId` de cada parte | Desde el primer turno de cada una |
+| A2A | URL de servicio de cada parte (D-131); `contextId` de cada parte | La URL, desde `NEGOTIATING`; el `contextId`, desde el primer turno de cada una |
 | Intento en curso | `taskId` en curso, instante de inicio del intento | Solo en `AWAITING_TASK` |
 | Reintento | `taskId` del intento anterior, `retryReason` | Solo si `attempt > 1` |
 | Negociación | Oferta vigente y su emisor | Desde el primer `PROPOSE` aceptado |
