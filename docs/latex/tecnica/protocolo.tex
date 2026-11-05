@@ -1,0 +1,58 @@
+\chapter{Protocolo}
+
+Este capítulo explica lo implementado del protocolo. Por ahora, las peticiones del comprador. Los actos y el turno están pendientes de implementar.
+
+\section{Peticiones del comprador}
+
+El coordinador del comprador es cliente A2A del orquestador (D-87). Le envía sus peticiones en el Message de \texttt{SendMessage}, y el orquestador responde siempre con una Task. Lo único implementado es \texttt{OPEN\_ROUND}, en su primera ronda.
+
+\subsection{Autenticación}
+
+Cada petición lleva \texttt{Authorization: Bearer <token>} (D-128). La AgentCard del orquestador es pública y declara ese esquema. Sin un token válido, el orquestador responde 401 con \texttt{WWW-Authenticate}. Es el único caso en el que no queda rastro en el registro de peticiones: así, nadie sin credencial puede llenar las tablas.
+
+\subsection{Forma de la petición}
+
+El Message lleva la cabecera \texttt{A2A-Extensions}, la URI de la extensión en \texttt{extensions}, el sobre en \texttt{metadata} y una sola Part \texttt{data} (D-19, D-103). Este es el contenido, sin la configuración de cada sesión:
+
+\begin{verbatim}
+metadata["urn:tfm:negociacion:v1"]:
+  { "type": "OPEN_ROUND", "sender": "comprador-1" }
+
+Part data, con mediaType
+application/vnd.tfm.negociacion.peticion+json:
+  { "sessions": [ { "itemId": "partida-1", "config": { ... } } ] }
+\end{verbatim}
+
+\subsection{Resultado}
+
+Si la petición es válida, la Task empieza en \texttt{TASK\_STATE\_WORKING} y se completa cuando todas las sesiones han salido de \texttt{CREATED} (D-94). Con \texttt{returnImmediately = true}, el coordinador recibe la Task enseguida y la consulta con \texttt{GetTask}; sin él, la respuesta espera al resultado. El Artifact dice qué sesiones han empezado:
+
+\begin{verbatim}
+{ "requestId": "...", "round": 1,
+  "sessions": [
+    { "itemId": "partida-1", "sessionId": "...",
+      "started": true },
+    { "itemId": "partida-2", "sessionId": "...",
+      "started": false, "failedPartyId": "vendedor-2" } ] }
+\end{verbatim}
+
+\subsection{Rechazos}
+
+Una petición con fallos no crea nada: la Task termina en \texttt{TASK\_STATE\_REJECTED} y su mensaje de estado lleva todos los fallos, ordenados por ruta (D-89, D-101). Los índices se ordenan como números, así que \texttt{sessions.2} va antes que \texttt{sessions.10}.
+
+\begin{verbatim}
+{ "rejections": [
+    { "code": "INVALID_CONFIG",
+      "field": "body.sessions.0.config.maxTurns" } ] }
+\end{verbatim}
+
+\begin{tabular}{p{4.2cm}p{9.3cm}}
+  \textbf{Código} & \textbf{Cuándo} \\
+  \texttt{INVALID\_MESSAGE} & El Message no tiene forma de petición (D-103). \\
+  \texttt{MISSING\_FIELD} \newline \texttt{WRONG\_TYPE} \newline \texttt{UNKNOWN\_VALUE} \newline \texttt{UNKNOWN\_FIELD} & Fallos de estructura del sobre o del cuerpo. \\
+  \texttt{INVALID\_CONFIG} & Una configuración incumple sus restricciones, hay un \texttt{itemId} repetido, el \texttt{BUYER} cambia entre sesiones o un origen no está permitido (D-102, D-129). \\
+  \texttt{NOT\_AUTHORIZED} & El \texttt{sender} no es la identidad autenticada o no es el \texttt{BUYER} de las sesiones (D-102, D-128). \\
+  \texttt{UNKNOWN\_REQUEST} & La petición lleva \texttt{requestId}. Es un límite de esta versión, que no implementa la ronda 2. \\
+\end{tabular}
+
+El mensaje de estado lleva un sobre con \texttt{sender = ORCHESTRATOR}. Si no se pudo leer un \texttt{type} de petición válido, va sin sobre, porque no hay un valor correcto que poner (D-106).
