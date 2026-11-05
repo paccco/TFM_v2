@@ -69,11 +69,11 @@ class _Sesion:
         return [p["partyId"] for p in self.config["parties"]]
 
 
-def _jsonb(valor: Any) -> Jsonb:
+def jsonb_exacto(valor: Any) -> Jsonb:
     return Jsonb(valor, dumps=a_json)
 
 
-async def _conexion(dsn: str) -> psycopg.AsyncConnection[Any]:
+async def conexion_exacta(dsn: str) -> psycopg.AsyncConnection[Any]:
     """Conexión que lee los JSON con los decimales exactos (D-37)."""
     c = await conectar(dsn)
     set_json_loads(leer_json, context=c)
@@ -126,7 +126,7 @@ async def _turno(
                 entorno, s, None, Fallo("AGENT_ERROR", "task")
             )  # D-71
         task = resultado.get("task") if isinstance(resultado, dict) else None
-        if not isinstance(task, dict) or not _texto_valido(task.get("id")):
+        if not isinstance(task, dict) or not texto_valido(task.get("id")):
             return await _resolver(
                 entorno, s, None, Fallo("MISSING_ACT", "task")
             )  # D-62
@@ -184,7 +184,7 @@ def _estado(task: Any) -> Any:
     return estado if isinstance(estado, str) else ""
 
 
-def _texto_valido(valor: Any) -> bool:
+def texto_valido(valor: Any) -> bool:
     """Un identificador que PostgreSQL puede guardar tal cual."""
     return isinstance(valor, str) and texto_seguro(valor) == valor
 
@@ -206,30 +206,49 @@ def _peticion(s: _Sesion) -> dict[str, Any]:
     }
     if s.turn > 1:
         cuerpo["lastOffer"] = s.oferta_vigente
+    return envio_de_control(
+        s.session_id,
+        s.turn,
+        "TURN_REQUEST",
+        cuerpo,
+        s.message_id,  # D-66
+        s.context_ids.get(
+            s.parte
+        ),  # D-20: sin `contextId` en el primer turno de cada parte
+    )
+
+
+def envio_de_control(
+    session_id: str,
+    turn: int,
+    tipo: str,
+    cuerpo: dict[str, Any],
+    message_id: str,
+    context_id: str | None,
+) -> dict[str, Any]:
+    """`params` de `SendMessage` para un mensaje de control (D-19, D-21, D-58)."""
     mensaje: dict[str, Any] = {
-        "messageId": s.message_id,  # D-66
+        "messageId": message_id,
         "role": "ROLE_USER",
         "parts": [{"data": cuerpo, "mediaType": MEDIA_CONTROL}],
         "metadata": {
             URI_EXTENSION: {
-                "sessionId": s.session_id,
-                "turn": s.turn,
-                "type": "TURN_REQUEST",
+                "sessionId": session_id,
+                "turn": turn,
+                "type": tipo,
                 "sender": ORCHESTRATOR,
             }
         },
         "extensions": [URI_EXTENSION],
     }
-    if (
-        s.parte in s.context_ids
-    ):  # D-20: sin `contextId` en el primer turno de cada parte
-        mensaje["contextId"] = s.context_ids[s.parte]
-    return {"message": mensaje, "configuration": {"returnImmediately": True}}  # D-58
+    if context_id is not None:
+        mensaje["contextId"] = context_id
+    return {"message": mensaje, "configuration": {"returnImmediately": True}}
 
 
 async def _tomar(entorno: Entorno, session_id: str) -> _Sesion | None:
     """Renueva el arrendamiento y toma el instante de inicio del intento (D-63, D-65)."""
-    async with await _conexion(entorno.dsn) as c:
+    async with await conexion_exacta(entorno.dsn) as c:
         cursor = await c.execute(
             f"""
             UPDATE sesiones
@@ -250,10 +269,10 @@ async def _esperar_task(entorno: Entorno, s: _Sesion, task: dict[str, Any]) -> b
     contexto = task.get("contextId")
     nuevo = (
         {s.parte: contexto}
-        if s.parte not in s.context_ids and _texto_valido(contexto)
+        if s.parte not in s.context_ids and texto_valido(contexto)
         else {}
     )
-    async with await _conexion(entorno.dsn) as c:
+    async with await conexion_exacta(entorno.dsn) as c:
         cursor = await c.execute(
             f"""
             UPDATE sesiones
@@ -265,7 +284,7 @@ async def _esperar_task(entorno: Entorno, s: _Sesion, task: dict[str, Any]) -> b
             (
                 task["id"],
                 s.inicio,
-                _jsonb(nuevo),
+                jsonb_exacto(nuevo),
                 s.session_id,
                 s.version,
                 entorno.instancia,
@@ -335,7 +354,7 @@ async def _resolver(
     shortcut: con `maxRetries = 0` (v0.1.0) todo fallo agota los reintentos;
     feature/reintentos-aborto añade el paso a `READY` con `attempt + 1`.
     """
-    async with await _conexion(entorno.dsn) as c:
+    async with await conexion_exacta(entorno.dsn) as c:
         ahora = await _reservar(c, entorno, s)
         if ahora is None:
             return False
@@ -370,7 +389,7 @@ async def _aceptar(
     """Paso 10 y flujos 10a a 10c: acto al registro y transición, en una transacción."""
     if reason is not None:
         reason = texto_seguro(reason)
-    async with await _conexion(entorno.dsn) as c:
+    async with await conexion_exacta(entorno.dsn) as c:
         ahora = await _reservar(c, entorno, s)
         if ahora is None:
             return False
@@ -385,7 +404,7 @@ async def _aceptar(
                 s.turn,
                 s.parte,
                 tipo,
-                None if oferta is None else _jsonb(oferta),
+                None if oferta is None else jsonb_exacto(oferta),
                 reason,
                 s.task_id,
                 ahora,
@@ -400,7 +419,7 @@ async def _aceptar(
                     oferta_vigente = %s, emisor_oferta = %s
                 WHERE session_id = %s
                 """,
-                (str(uuid4()), _jsonb(oferta), s.parte, s.session_id),
+                (str(uuid4()), jsonb_exacto(oferta), s.parte, s.session_id),
             )
             return True
         if tipo == "ACCEPT":  # D-42, D-84 a D-86: acuerdo provisional, no cierre
@@ -413,7 +432,7 @@ async def _aceptar(
                         + make_interval(secs => (config->>'holdTimeoutSeconds')::bigint)
                 WHERE session_id = %s
                 """,
-                (_jsonb(_pendientes(s)), ahora, s.session_id),
+                (jsonb_exacto(_pendientes(s)), ahora, s.session_id),
             )
             return False
         if tipo == "WITHDRAW":
@@ -452,5 +471,5 @@ async def _a_closing(
             resultado = %s, envios_close = %s
         WHERE session_id = %s
         """,
-        (_jsonb(resultado), _jsonb(_pendientes(s)), s.session_id),
+        (jsonb_exacto(resultado), jsonb_exacto(_pendientes(s)), s.session_id),
     )

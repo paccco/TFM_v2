@@ -101,3 +101,18 @@ CREATE TABLE IF NOT EXISTS registro_peticiones (
 CREATE UNIQUE INDEX IF NOT EXISTS registro_peticiones_unica
     ON registro_peticiones (sender, message_id)
     WHERE sender = identidad;
+
+-- Registro de envíos de control (D-70, D-85): uno por envío de AGREEMENT_HELD o SESSION_CLOSE.
+CREATE TABLE IF NOT EXISTS envios_control (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id  uuid NOT NULL REFERENCES sesiones,
+    tipo        text NOT NULL,
+    parte       text NOT NULL,
+    turn        integer NOT NULL,
+    instante    timestamptz NOT NULL,   -- el de la escritura de la marca (D-69)
+    resultado   text NOT NULL,          -- ENVIADO o FALLIDO
+    task_id     text,
+    estado_task text,
+    con_message boolean NOT NULL,
+    code        text                    -- AGENT_UNREACHABLE, TURN_TIMEOUT o AGENT_ERROR
+);
