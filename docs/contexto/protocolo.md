@@ -1,6 +1,6 @@
 # Protocolo de negociación
 
-Decisiones que lo condicionan: D-10, D-11, D-17 a D-74, D-77 a D-94, D-97 a D-118 y D-123. D-32 sustituye a D-09, D-58 sustituye a D-24 y D-75 sustituye a D-03.
+Decisiones que lo condicionan: D-10, D-11, D-17 a D-74, D-77 a D-94, D-97 a D-118, D-123, D-128 y D-129. D-32 sustituye a D-09, D-58 sustituye a D-24 y D-75 sustituye a D-03.
 
 Vocabulario: una **parte** es cada participante de una sesión, comprador o vendedor (D-75). Su identificador es `partyId` y se fija en la configuración de la sesión (D-30, D-90). El **coordinador** es el componente del agente comprador que agrupa las sesiones de una petición (D-80).
 
@@ -125,6 +125,19 @@ ordenados por ruta. Las comprobaciones que dependen de un campo con fallo
 estructural (`MISSING_FIELD`, `WRONG_TYPE`, `UNKNOWN_VALUE`) no se hacen
 sobre ese campo (D-101).
 
+### Autenticación del coordinador (D-128)
+Todo acceso al orquestador salvo su AgentCard exige `Authorization: Bearer
+<token>`. Cada token corresponde a un `partyId` y se configura en el
+despliegue. La AgentCard lo declara como esquema HTTP bearer. Sin credencial
+válida, el orquestador responde 401 con `WWW-Authenticate`, sin Task ni
+entrada en el registro de peticiones.
+
+Un `sender` distinto de la identidad autenticada se rechaza: con
+`NOT_AUTHORIZED` en `envelope.sender` en `OPEN_ROUND` y con `UNKNOWN_REQUEST`
+en `body.requestId` en `RESOLVE_HOLDS`. El duplicado solo se busca si `sender`
+es la identidad autenticada. `GetTask` de una Task de otra identidad responde
+`TaskNotFoundError`, sin distinguirla de una inexistente.
+
 ### Forma de una petición (D-103)
 Un Message dirigido al orquestador tiene forma de petición si lleva la
 cabecera `A2A-Extensions` con la URI de la extensión, la URI en
@@ -133,15 +146,16 @@ exactamente una Part, de tipo `data` y con el `mediaType` de petición. Si
 le falta algo de esto, se rechaza con un solo fallo, `INVALID_MESSAGE` en
 `message`, sin validar el sobre ni el cuerpo.
 
-### Peticiones duplicadas (D-98, D-109)
+### Peticiones duplicadas (D-98, D-109, D-128)
 Antes de validar un `OPEN_ROUND` o un `RESOLVE_HOLDS`, el orquestador
 busca en el registro de peticiones una entrada con el mismo `sender` y
 `messageId`. Si existe, devuelve la Task de esa petición en su estado
 actual, aceptada o rechazada, y no escribe nada. El par `sender` +
-`messageId` es único en el registro: si dos copias llegan a la vez, la
-segunda escritura falla y se devuelve la Task de la primera. Si el sobre
-no permite leer `sender`, no se comprueba el duplicado y la petición se
-rechaza.
+`messageId` es único entre las entradas cuyo `sender` es su identidad
+autenticada: si dos copias llegan a la vez, la segunda escritura falla y
+se devuelve la Task de la primera. Si el sobre no permite leer `sender`, o
+`sender` no es la identidad autenticada, no se comprueba el duplicado y la
+petición se rechaza.
 
 ### Sobre del resultado (D-104, D-106)
 El Artifact de resultado y el mensaje de estado de un rechazo llevan la
@@ -219,7 +233,9 @@ Artifact de resultado: `requestId`, `confirmed` y `released`, con los
 | Ambas | Sobre o cuerpo con un campo ausente, de tipo incorrecto, con valor enumerado desconocido o no definido | `MISSING_FIELD`, `WRONG_TYPE`, `UNKNOWN_VALUE`, `UNKNOWN_FIELD` | Ruta del campo |
 | `OPEN_ROUND` | Alguna configuración incumple sus restricciones, incluidas las que se comprueban sobre los valores efectivos (D-91) | `INVALID_CONFIG` | `body.sessions.<i>.config.<campo>` |
 | `OPEN_ROUND` | `itemId` repetido en la ronda, o el `partyId` del `BUYER` no es el mismo en todas las sesiones | `INVALID_CONFIG` | Ruta del campo |
+| `OPEN_ROUND` | El origen de un `agentCardUrl` no está en la lista de orígenes permitidos (D-129) | `INVALID_CONFIG` | `body.sessions.<i>.config.parties.<j>.agentCardUrl` |
 | `OPEN_ROUND` | El `partyId` del `BUYER` es el mismo en todas las sesiones, pero distinto del `sender`. En cualquier ronda | `NOT_AUTHORIZED` | `envelope.sender` |
+| `OPEN_ROUND` | El `sender` es distinto de la identidad autenticada (D-128) | `NOT_AUTHORIZED` | `envelope.sender` |
 | Ambas | `requestId` desconocido o cuyo comprador no es el `sender`. No se distingue entre los dos casos | `UNKNOWN_REQUEST` | `body.requestId` |
 | `OPEN_ROUND` | Con `requestId`, alguna sesión de la petición está en `CREATED` o `NEGOTIATING` | `ROUND_CONFLICT` | `body.requestId` |
 | `OPEN_ROUND` | Un `itemId` coincide con el de una sesión de la petición en `HELD`, o en `CLOSING` o `CLOSED` con `outcome = AGREEMENT` | `ROUND_CONFLICT` | `body.sessions.<i>.itemId` |
@@ -229,7 +245,9 @@ Artifact de resultado: `requestId`, `confirmed` y `released`, con los
 | `RESOLVE_HOLDS` | Un `sessionId` repetido dentro de una misma lista | `INVALID_REQUEST` | Cada aparición después de la primera (D-114) |
 
 Si el `partyId` del `BUYER` no es el mismo en todas las sesiones, se
-rechaza con `INVALID_CONFIG` y no se añade `NOT_AUTHORIZED` (D-102). En
+rechaza con `INVALID_CONFIG` y la comparación con el `BUYER` no añade
+`NOT_AUTHORIZED` (D-102); la comparación con la identidad autenticada se
+hace igualmente (D-128). En
 `RESOLVE_HOLDS` no se usa `NOT_AUTHORIZED`: un `sender` que no es el
 comprador del `requestId` se rechaza con `UNKNOWN_REQUEST` (D-113). Si un
 `sessionId` está en las dos listas y además repetido en alguna, se marcan
@@ -429,11 +447,11 @@ envíos de control no lleva campo.
 | `ACT_BODY_MISMATCH` | El sobre y el cuerpo no coinciden | R-06, R-08. No en R-14 ni R-16 |
 | `ACT_NOT_ALLOWED` | Acto no permitido en el turno | R-07. No en R-16 |
 | `INVALID_MESSAGE` | Un Message dirigido al orquestador no tiene forma de petición (D-103) | No aplica: rechazo |
-| `INVALID_CONFIG` | Una configuración de `OPEN_ROUND` incumple sus restricciones, hay un `itemId` repetido o el `partyId` del `BUYER` no es el mismo en todas las sesiones (D-89, D-91, D-102) | No aplica: rechazo |
+| `INVALID_CONFIG` | Una configuración de `OPEN_ROUND` incumple sus restricciones, hay un `itemId` repetido, el `partyId` del `BUYER` no es el mismo en todas las sesiones o un `agentCardUrl` tiene un origen no permitido (D-89, D-91, D-102, D-129) | No aplica: rechazo |
 | `UNKNOWN_REQUEST` | `requestId` desconocido o cuyo comprador no es el `sender`, sin distinguir los dos casos (D-89, D-102, D-113) | No aplica: rechazo |
 | `ROUND_CONFLICT` | `OPEN_ROUND` con la ronda anterior sin terminar, o que reabre una partida en `HELD` o ya confirmada (D-100, D-105) | No aplica: rechazo |
 | `NOT_HELD` | Una sesión de `RESOLVE_HOLDS` no pertenece a la petición, no está en `HELD` o tiene `heldUntil` vencido (D-89, D-111) | No aplica: rechazo |
-| `NOT_AUTHORIZED` | Solo en `OPEN_ROUND`: el `BUYER` es el mismo en todas las sesiones pero distinto del `sender` (D-89, D-102, D-113) | No aplica: rechazo |
+| `NOT_AUTHORIZED` | Solo en `OPEN_ROUND`: el `BUYER` es el mismo en todas las sesiones pero distinto del `sender`, o el `sender` es distinto de la identidad autenticada (D-89, D-102, D-113, D-128) | No aplica: rechazo |
 | `INVALID_REQUEST` | `RESOLVE_HOLDS` con las dos listas vacías, con una sesión en las dos o con un `sessionId` repetido en una lista (D-89, D-114, D-116) | No aplica: rechazo |
 
 El modo estricto está en `autocorreccion.md`. En las peticiones del comprador
@@ -449,14 +467,15 @@ cualquier código produce rechazo.
   `SESSION_CLOSE`), parte, `turn`, instante, resultado (enviado o
   fallido) y, según el caso, `taskId` y estado de la Task, indicación de
   Message o `code` del fallo.
-- **Petición del comprador** (D-89, D-98, D-103, D-109, D-118): tipo,
-  `requestId`, ronda, `sender`, `messageId`, `taskId` de la Task de la
-  petición, resultado (aceptada o rechazada), códigos de rechazo e
-  instante. El tipo y el `sender` solo figuran si se pudieron leer, y
-  `requestId` falta en un rechazo de ronda 1 o si no es válido. En
+- **Petición del comprador** (D-89, D-98, D-103, D-109, D-118, D-128): tipo,
+  `requestId`, ronda, `sender`, identidad autenticada, `messageId`, `taskId`
+  de la Task de la petición, resultado (aceptada o rechazada), códigos de
+  rechazo e instante. El tipo y el `sender` solo figuran si se pudieron leer,
+  y `requestId` falta en un rechazo de ronda 1 o si no es válido. En
   `RESOLVE_HOLDS`, la ronda es la última abierta de la petición, y falta
   si el `requestId` no es válido. Un duplicado no deja entrada. El par
-  `sender` + `messageId` es único.
+  `sender` + `messageId` es único entre las entradas cuyo `sender` es su
+  identidad.
 
 Los cuatro son tablas de solo añadir en PostgreSQL, escritas en la misma
 transacción que la transición de estado que las produce (D-63, D-69).

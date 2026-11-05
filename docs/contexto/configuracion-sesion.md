@@ -2,7 +2,7 @@
 
 Define con qué valores se ejecuta cada sesión (D-40). El coordinador del comprador la envía, una por partida, en `OPEN_ROUND` (D-88).
 
-Decisiones que lo condicionan: D-08, D-11, D-30, D-36, D-40, D-41, D-51, D-52, D-54, D-56, D-59, D-65, D-67, D-83, D-86, D-88 a D-91, D-99 y D-102.
+Decisiones que lo condicionan: D-08, D-11, D-30, D-36, D-40, D-41, D-51, D-52, D-54, D-56, D-59, D-65, D-67, D-83, D-86, D-88 a D-91, D-99, D-102 y D-129.
 
 ## Campos
 
@@ -25,12 +25,13 @@ Los nombres de campo van en inglés y camelCase (D-29).
 |---|---|---|
 | `partyId` | cadena | Identificador de la parte en la sesión. Es el valor de `sender` en sus actos (D-30) |
 | `role` | enumerado `BUYER` / `SELLER` | Papel de la parte (D-41) |
-| `agentCardUrl` | cadena (URL) | Dónde obtener la AgentCard del agente de esa parte, para comprobar la extensión (D-25, D-99) y llamarlo. El orden de `parties` decide `failedPartyId` si fallan las dos AgentCards (D-99) |
+| `agentCardUrl` | cadena (URL) | Dónde obtener la AgentCard del agente de esa parte, para comprobar la extensión (D-25, D-99) y llamarlo. Su origen debe estar en la lista de orígenes permitidos del despliegue (D-129). El orden de `parties` decide `failedPartyId` si fallan las dos AgentCards (D-99) |
 
 ## Restricciones en `OPEN_ROUND`
 - En todas las sesiones de una ronda, el `partyId` del `BUYER` es el mismo. Si no, se rechaza con `INVALID_CONFIG` (D-102).
 - Ese `partyId` coincide con el `sender` de `OPEN_ROUND`. Si es el mismo en todas las sesiones pero distinto del `sender`, se rechaza con `NOT_AUTHORIZED` en `envelope.sender`, en cualquier ronda (D-102).
 - Los `itemId` de la ronda son distintos. Si no, se rechaza con `INVALID_CONFIG` (D-92).
+- El origen de cada `agentCardUrl` está en la lista de orígenes permitidos del despliegue. Si no, se rechaza con `INVALID_CONFIG` en `body.sessions.<i>.config.parties.<j>.agentCardUrl`, sin ninguna petición de red (D-129).
 - Las rondas siguientes de una petición mantienen el mismo comprador: un `requestId` cuyo comprador no es el `sender` se rechaza con `UNKNOWN_REQUEST` (D-102).
 - Si alguna configuración de la ronda incumple una restricción, se rechaza la ronda entera y no se crea ninguna sesión (D-89).
 
