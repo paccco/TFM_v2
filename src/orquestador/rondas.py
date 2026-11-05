@@ -189,7 +189,8 @@ async def comprobar_sesion(entorno: Entorno, session_id: str) -> None:
     version, config = fila
 
     plazo = config["turnTimeoutSeconds"]
-    async with httpx.AsyncClient(follow_redirects=False) as cliente:  # D-129
+    # D-99: el único tiempo máximo es el de `_agentcard_correcta`. D-129: sin redirecciones.
+    async with httpx.AsyncClient(follow_redirects=False, timeout=None) as cliente:
         correctas = await asyncio.gather(
             *[
                 _agentcard_correcta(cliente, parte["agentCardUrl"], plazo)

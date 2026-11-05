@@ -495,3 +495,14 @@ def test_duplicado_aceptado_termina_en_error_sin_escribir(
         asyncio.run(segundo())
     assert filas(dsn, "SELECT count(*) FROM sesiones") == [(1,)]
     assert filas(dsn, "SELECT count(*) FROM registro_peticiones") == [(1,)]
+
+
+def test_ac_04_06_el_unico_tiempo_maximo_es_turn_timeout(
+    dsn: str, agentes: ServidorHttp
+) -> None:
+    """D-99: una AgentCard que tarda 6 s es válida con `turnTimeoutSeconds = 10`."""
+    ent = entorno(dsn, agentes)
+    c = config(agentes, vendedor="seis-segundos", turnTimeoutSeconds=10)
+    r = recibir(ent, mensaje(c))
+    asyncio.run(comprobar_sesion(ent, r.sesiones[0]))
+    assert filas(dsn, "SELECT estado FROM sesiones") == [("NEGOTIATING",)]

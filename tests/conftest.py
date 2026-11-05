@@ -62,6 +62,9 @@ def _app_de_tarjetas(servidor: ServidorHttp) -> Starlette:
         if ruta == "/lenta.json":
             await asyncio.sleep(3)
             return JSONResponse(tarjeta())
+        if ruta == "/seis-segundos.json":
+            await asyncio.sleep(6)
+            return JSONResponse(tarjeta())
         if ruta == "/basura.json":
             return PlainTextResponse("esto no es una AgentCard")
         if ruta == "/error.json":
