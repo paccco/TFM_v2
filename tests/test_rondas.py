@@ -179,7 +179,7 @@ def test_d_131_guarda_la_url_de_servicio_de_cada_parte(
     ent = entorno(dsn, agentes)
     r = recibir(ent, mensaje(config(agentes)))
     asyncio.run(comprobar_sesion(ent, r.sesiones[0]))
-    servicio = f"{agentes.url}{RUTA_AGENTE}"
+    servicio = f"{agentes.url}{RUTA_AGENTE}/con.json"
     assert filas(dsn, "SELECT urls_servicio FROM sesiones") == [
         ({COMPRADOR: servicio, VENDEDOR: servicio},)
     ]

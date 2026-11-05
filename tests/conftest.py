@@ -4,7 +4,7 @@ import asyncio
 import os
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
@@ -58,18 +58,27 @@ def tarjeta(
 
 @dataclass
 class ServidorHttp:
-    """Servidor real: las peticiones recibidas quedan en `visitas`."""
+    """Servidor real: las peticiones recibidas quedan en `visitas`.
+
+    Sirve las AgentCards y, en `RUTA_AGENTE`, el agente A2A de cada test: `rpc` responde a
+    sus llamadas JSON-RPC. Sin `rpc`, responde 500.
+    """
 
     url: str
     visitas: list[str] = field(default_factory=list)
+    rpc: Callable[[Request], Awaitable[Response]] | None = None
 
 
 def _app_de_tarjetas(servidor: ServidorHttp) -> Starlette:
     async def responder(request: Request) -> Response:
         ruta = request.url.path
         servidor.visitas.append(f"{request.method} {ruta}")
-        # D-131: la URL de servicio de cada AgentCard apunta a este mismo servidor.
-        servicio = f"{servidor.url}{RUTA_AGENTE}"
+        if ruta.startswith(RUTA_AGENTE):
+            if servidor.rpc is None:
+                return PlainTextResponse("sin guion", status_code=500)
+            return await servidor.rpc(request)
+        # D-131: la URL de servicio apunta a este mismo servidor; la ruta distingue la parte.
+        servicio = f"{servidor.url}{RUTA_AGENTE}{ruta}"
         if ruta == "/opcional.json":
             return JSONResponse(tarjeta(servicio, requerida=False))
         if ruta == "/sin.json":
@@ -126,6 +135,7 @@ def _servidor_de_tarjetas() -> Iterator[ServidorHttp]:
 @pytest.fixture
 def agentes(_servidor_de_tarjetas: ServidorHttp) -> ServidorHttp:
     _servidor_de_tarjetas.visitas.clear()
+    _servidor_de_tarjetas.rpc = None
     return _servidor_de_tarjetas
 
 
