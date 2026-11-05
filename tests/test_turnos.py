@@ -559,6 +559,36 @@ def test_d_63_sin_el_arrendamiento_no_negocia(dsn: str, agentes: ServidorHttp) -
     assert sesion(dsn) == antes
 
 
+@dataclass
+class _AgenteQueCedeLaSesion(Agente):
+    """Al recibir `GetTask`, otra instancia toma la sesión."""
+
+    async def __call__(self, request: Request) -> Response:
+        if b'"GetTask"' in await request.body():
+            with psycopg.connect(self.dsn) as c:
+                c.execute("UPDATE sesiones SET instancia = 'otra'")
+        return await super().__call__(request)
+
+
+def test_d_63_arrendamiento_perdido_durante_el_sondeo(
+    dsn: str, agentes: ServidorHttp
+) -> None:
+    """La instancia descarta su trabajo: ni acto, ni fallo, ni transición."""
+    ent, sid, _ = preparar(dsn, agentes, {1: [TRABAJANDO, acto("WITHDRAW")]})
+    agente = _AgenteQueCedeLaSesion(dsn, {1: [TRABAJANDO, acto("WITHDRAW")]})
+    agentes.rpc = agente
+    asyncio.run(negociar(ent, sid))
+    assert agente.metodos() == ["SendMessage", "GetTask"]
+    assert actos_aceptados(dsn) == []
+    assert registro(dsn, "SELECT count(*) FROM fallos") == [(0,)]
+    s = sesion(dsn)
+    assert (s["estado"], s["subestado"], s["instancia"]) == (
+        "NEGOTIATING",
+        "AWAITING_TASK",
+        "otra",
+    )
+
+
 # --- Interoperabilidad con un agente hecho con a2a-sdk (D-132) ---------------------------
 
 

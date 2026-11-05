@@ -9,10 +9,8 @@ fallo de un intento agota los reintentos y la sesión pasa a `CLOSING` con `ABOR
 """
 
 import asyncio
-import json
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
@@ -27,6 +25,7 @@ from orquestador.cliente_agentes import (
     ErrorA2A,
     ErrorTransporte,
     a_json,
+    leer_json,
     llamar,
 )
 from orquestador.peticiones import URI_EXTENSION, Fallo
@@ -70,10 +69,6 @@ class _Sesion:
         return [p["partyId"] for p in self.config["parties"]]
 
 
-def _leer_json(texto: str | bytes) -> Any:
-    return json.loads(texto, parse_float=Decimal)
-
-
 def _jsonb(valor: Any) -> Jsonb:
     return Jsonb(valor, dumps=a_json)
 
@@ -81,7 +76,7 @@ def _jsonb(valor: Any) -> Jsonb:
 async def _conexion(dsn: str) -> psycopg.AsyncConnection[Any]:
     """Conexión que lee los JSON con los decimales exactos (D-37)."""
     c = await conectar(dsn)
-    set_json_loads(_leer_json, context=c)
+    set_json_loads(leer_json, context=c)
     return c
 
 
