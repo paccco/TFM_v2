@@ -19,7 +19,14 @@ from a2a.server.events import EventQueue
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.routes import create_agent_card_routes, create_jsonrpc_routes
 from a2a.server.tasks import InMemoryTaskStore, TaskUpdater
-from a2a.types.a2a_pb2 import AgentCard, Part, SendMessageRequest
+from a2a.types.a2a_pb2 import (
+    AgentCard,
+    Part,
+    SendMessageRequest,
+    Task,
+    TaskState,
+    TaskStatus,
+)
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.struct_pb2 import Value
 from starlette.applications import Starlette
@@ -582,7 +589,13 @@ class _EjecutorSdk(AgentExecutor):
             "sender": COMPRADOR if turno % 2 else VENDEDOR,
         }
         updater = TaskUpdater(event_queue, context.task_id, context.context_id)
-        await updater.submit()
+        await event_queue.enqueue_event(  # el manejador v2 exige la Task antes que sus eventos
+            Task(
+                id=context.task_id,
+                context_id=context.context_id,
+                status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED),
+            )
+        )
         await updater.add_artifact(
             [Part(data=datos, media_type=MEDIA_ACTO)],
             metadata={URI_EXTENSION: acto_sdk},
