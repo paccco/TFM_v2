@@ -47,6 +47,7 @@ def test_uv_sync_deja_un_entorno_limpio_e_importable(tmp_path: Path) -> None:
         cwd=tmp_path,
         capture_output=True,
         text=True,
+        check=False,
     )
     assert resultado.returncode == 0, resultado.stderr
 
@@ -64,11 +65,10 @@ def test_transaccion_entre_dos_tablas_se_deshace_entera(
     conexion: psycopg.Connection,
 ) -> None:
     """D-63, D-69: un fallo en la segunda tabla deshace también la primera."""
-    with pytest.raises(psycopg.errors.UniqueViolation):
-        with conexion.transaction():
-            conexion.execute("INSERT INTO sesiones VALUES (1, 1)")
-            conexion.execute("INSERT INTO registro VALUES (1)")
-            conexion.execute("INSERT INTO registro VALUES (1)")
+    with pytest.raises(psycopg.errors.UniqueViolation), conexion.transaction():
+        conexion.execute("INSERT INTO sesiones VALUES (1, 1)")
+        conexion.execute("INSERT INTO registro VALUES (1)")
+        conexion.execute("INSERT INTO registro VALUES (1)")
 
     fila = conexion.execute(
         "SELECT (SELECT count(*) FROM sesiones) + (SELECT count(*) FROM registro)"
@@ -111,6 +111,7 @@ def test_documento_latex_compila(documento: str, tmp_path: Path) -> None:
         cwd=RAIZ / "docs" / "latex" / documento,
         capture_output=True,
         text=True,
+        check=False,
     )
     assert resultado.returncode == 0, resultado.stdout[-2000:]
     assert (tmp_path / f"{documento}.pdf").exists()
