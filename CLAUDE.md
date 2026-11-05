@@ -34,19 +34,21 @@ docs/
   agents/                Subagentes: explorador, revisor
   skills/                proponer-funcionalidad, implementar-rama, cerrar-release
   settings.json          Permisos
-src/                     <se define con el desarrollador>
+src/
+  orquestador/           Paquete del orquestador
 tests/
+docker-compose.yml       PostgreSQL de desarrollo y tests
 ```
 
 ## Stack
 
-- Lenguaje: Python 3.14, provisional hasta que `feature/setup` confirme que LangGraph y el SDK de A2A resuelven con ella; si no, 3.13 con aprobación del desarrollador (D-13)
+- Lenguaje: Python 3.14 (D-13, D-124)
 - Agentes de las partes: LangGraph, expuestos tras A2A
 - Gestor de entorno y dependencias: `uv` (las dependencias se añaden con `uv add`, nunca con `pip`; `uv.lock` se versiona)
 - Tests: `pytest`
 - Lint y formato: `ruff`
 - Tipos: anotaciones en todo el código, sin comprobador de tipos por ahora
-- Almacén del estado externalizado: PostgreSQL (D-69); versión y controlador se fijan en `feature/setup`
+- Almacén del estado externalizado: PostgreSQL 18.6, con `psycopg` (D-69, D-125)
 - Documentación: LaTeX, sin plantilla institucional, compilada con `latexmk` y LuaLaTeX
 - Modelos externos: Gemini vía `llm` (ver `proceso.md` §12)
 
@@ -56,6 +58,7 @@ No elijas tú lo que está marcado como «por decidir»: pregunta.
 
 ```
 uv sync                                           (instalar dependencias)
+docker compose up -d --wait                       (levantar PostgreSQL, necesario para los tests)
 uv run pytest                                     (ejecutar tests)
 uv run ruff format . && uv run ruff check .       (formato y lint)
 <levantar orquestador y agentes en local>

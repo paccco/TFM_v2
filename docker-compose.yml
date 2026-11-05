@@ -1,0 +1,21 @@
+# PostgreSQL de desarrollo y tests (D-69). Credenciales solo locales: el puerto no sale de esta máquina.
+services:
+  postgres:
+    image: postgres:18.6
+    environment:
+      POSTGRES_USER: tfm
+      POSTGRES_PASSWORD: tfm
+      POSTGRES_DB: tfm
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      # Desde la versión 18, la imagen guarda los datos en un subdirectorio de esta ruta.
+      - datos:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tfm -d tfm"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+volumes:
+  datos:

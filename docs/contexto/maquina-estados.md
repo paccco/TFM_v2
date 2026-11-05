@@ -1,6 +1,6 @@
 # Máquina de estados
 
-Decisiones que la condicionan: D-04, D-05, D-07, D-08, D-20, D-23, D-25, D-46, D-49, D-51 a D-57, D-58 a D-71, D-77 y D-82 a D-123. D-58 sustituye a D-24.
+Decisiones que la condicionan: D-04, D-05, D-07, D-08, D-20, D-23, D-25, D-46, D-49, D-51 a D-57, D-58 a D-71, D-77 y D-82 a D-126. D-58 sustituye a D-24.
 
 Este documento define los estados por los que pasa una sesión, los subestados de cada turno, qué se guarda en el estado externalizado en cada transición, cómo se agrupan las sesiones en peticiones, cómo se cierra la sesión y qué restricciones impone todo ello a la configuración. El estado externalizado se guarda en PostgreSQL (D-69).
 
@@ -259,10 +259,7 @@ Las restricciones se comprueban sobre los valores efectivos (D-91). La estructur
 El arrendamiento dura `turnTimeoutSeconds + pollIntervalSeconds` y no es configurable. El intervalo más largo sin renovarlo es una llamada a `SendMessage` o la obtención de una AgentCard, acotadas por `turnTimeoutSeconds` en los turnos, en cada envío de control y en la comprobación de AgentCards (D-99); el segundo término es el margen. Con los valores por defecto son 61 s. El retraso máximo en retomar una sesión tras una caída es la duración del arrendamiento más el periodo de la búsqueda: 66 s con los valores por defecto (D-120).
 
 ## 6. Preguntas abiertas
-- Comprobar en `feature/setup` que `a2a-sdk`, que implementa A2A 1.0, resuelve con Python 3.14 (D-13).
-- Comprobar en `feature/setup` que LangGraph resuelve con la misma versión de Python (D-13).
-- Fijar en `feature/setup` la versión de PostgreSQL y el controlador de Python (D-69).
-- Comprobar en `feature/setup` si `a2a-sdk` ofrece un almacén de Tasks en base de datos que sirva para las Tasks de las peticiones del comprador (D-97).
+- Comprobar al implementar D-87 cómo llama el manejador de `a2a-sdk` a `save`, para que la implementación propia de `TaskStore` escriba en la misma transacción que las sesiones (D-126).
 - Fuera del orquestador: los agentes de las partes necesitan un almacén persistente de Tasks para que el sondeo sobreviva a sus reinicios y para detectar duplicados por `messageId` (D-66). Se decide al diseñar los agentes.
 - Si falla el envío de `AGREEMENT_HELD` a un vendedor, este no sabe que debe reservar y puede vender a otro antes de la confirmación. Opciones a valorar: reintentar el envío, pedir acuse de recibo o permitir al vendedor indicar que ya no está disponible al confirmar. La última cambiaría el significado de un acuerdo (D-85). Se decide al diseñar los agentes.
 - Autenticación del coordinador ante el orquestador: comprobar que el `sender` es el comprador solo compara un valor declarado. A2A permite declarar esquemas de seguridad en la AgentCard; queda por diseñar (D-89).
