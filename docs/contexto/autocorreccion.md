@@ -46,7 +46,7 @@ Decisiones que lo condicionan: D-02, D-08, D-11, D-22, D-23, D-26, D-28, D-31, D
 | R-08 | Sobre `ACCEPT` con una oferta idéntica a la vigente tras normalizarla | Sigue como `ACCEPT` y se descarta la oferta | `ACT_BODY_MISMATCH` | D-42, D-73 | AC-03-09 |
 | R-09 | `productId`, `unit` o `currency` de la oferta ausentes o distintos de la sesión; `currency` en minúsculas | Se toman de la sesión; `currency` se normaliza a mayúsculas | `MISSING_FIELD`, `STATE_MISMATCH`, `INVALID_FORMAT` | D-36, D-39 | AC-01-09, AC-01-32 |
 | R-10 | `unitPrice` en forma textual con coma decimal, espacios o símbolo de moneda | Se normaliza a número, interpretado como decimal exacto (`"12,50 €"` → 12.50) | `INVALID_FORMAT` | D-37 | AC-01-08 |
-| R-11 | `quantity` como cadena numérica o como número con parte decimal nula | Se convierte a entero | `WRONG_TYPE` | D-39 | AC-01-33 |
+| R-11 | `quantity` como cadena numérica. Un número con parte decimal nula ya es entero (D-132) | Se convierte a entero | `WRONG_TYPE` | D-39, D-132 | AC-01-33 |
 | R-12 | `deliveryDays` o `paymentDays` como cadena numérica | Se convierte a entero | `WRONG_TYPE` | D-39 | AC-01-34 |
 
 ## Reglas no corregibles

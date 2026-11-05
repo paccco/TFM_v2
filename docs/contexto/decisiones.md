@@ -918,9 +918,16 @@ Decisiones tomadas al implementar CU-01 y CU-03 en `feature/turnos`.
 - **Decisión:** el orquestador llama a los agentes con `httpx` y JSON-RPC propio, y lee las respuestas con los números sin pasar por coma flotante.
 - **Motivo:** los tipos protobuf de `a2a-sdk` 1.3.0 no distinguen 10 de 10.0 ni conservan todos los decimales, y eso incumple R-11 y D-37.
 - **Descartado:** el cliente de `a2a-sdk`, porque obligaría a cambiar R-11 y D-37.
+- **Precisada por D-132.**
 
 ### D-131 · URL de servicio de los agentes
 - **Fecha:** 2026-11
 - **Decisión:** al comprobar la AgentCard, una parte también falla si no ofrece una interfaz JSON-RPC o si el origen de su URL no está en la lista de D-129. La sesión queda en `NOT_STARTED`. La URL válida se guarda en el registro de sesión y no se vuelve a pedir la tarjeta. Precisa D-99 y D-129.
 - **Motivo:** esa es la dirección que se llama de verdad. Sin límite, un agente podría dirigir al orquestador a un servicio interno. Guardarla permite retomar la sesión desde otra instancia.
 - **Descartado:** releer la tarjeta antes de cada envío; no comprobar el origen.
+
+### D-132 · Enteros con parte decimal nula
+- **Fecha:** 2026-11
+- **Decisión:** en los campos enteros de un acto (`turn`, `quantity`, `deliveryDays`, `paymentDays`), un número JSON con parte decimal nula es un entero: 10.0 vale 10, en los dos modos y sin coerción. El orquestador lo guarda y lo reenvía como entero. Una cadena numérica sigue siendo `WRONG_TYPE` (R-02, R-11, R-12). Precisa D-130 y R-11.
+- **Motivo:** `a2a-sdk` guarda los datos como números protobuf de coma flotante y envía 10 como 10.0. Si no, ningún agente hecho con el SDK pasaría el modo estricto.
+- **Descartado:** volver al cliente del SDK, porque pierde el decimal exacto del precio (D-37); exigir a los agentes que no usen los tipos del SDK.
