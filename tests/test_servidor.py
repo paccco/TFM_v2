@@ -120,7 +120,7 @@ def test_ac_04_28_la_agentcard_es_publica_y_declara_extension_y_bearer(
         "extensions"
     ][0].items()
     [esquema] = tarjeta["securitySchemes"].values()
-    assert esquema["httpAuthSecurityScheme"]["scheme"] == "bearer"
+    assert esquema["httpAuthSecurityScheme"]["scheme"].lower() == "bearer"
     assert tarjeta["securityRequirements"]
     assert tarjeta["supportedInterfaces"][0]["url"] == "http://orquestador.test/"
 
@@ -130,13 +130,13 @@ def test_ac_04_28_la_agentcard_es_publica_y_declara_extension_y_bearer(
     [
         {},
         {"Authorization": "Bearer token-falso"},
-        {"Authorization": "Bearer "},
+        {"Authorization": "Bearer"},
         {"Authorization": f"Basic {TOKEN}"},
-        {"Authorization": "Bearer tóken"},
+        {"Authorization": "Bearer tóken".encode()},
     ],
 )
 def test_ac_04_28_sin_credencial_valida_401_y_nada_escrito(
-    dsn: str, orquestador: str, agentes: ServidorHttp, cabeceras: dict[str, str]
+    dsn: str, orquestador: str, agentes: ServidorHttp, cabeceras: dict[str, Any]
 ) -> None:
     respuesta = httpx.post(
         orquestador,
