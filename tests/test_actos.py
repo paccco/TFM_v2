@@ -94,6 +94,19 @@ def test_ac_01_16_withdraw_valido_con_o_sin_reason(cuerpo: dict[str, Any]) -> No
     )
 
 
+def test_d_132_enteros_con_parte_decimal_nula_se_aceptan_como_enteros() -> None:
+    """AC-01-33: `a2a-sdk` envía 10 como 10.0; se acepta sin coerción y queda como `int`."""
+    o = oferta(
+        quantity=leer("10.0"), deliveryDays=leer("30.0"), paymentDays=leer("6E+1")
+    )
+    acto = validar(task({"offer": o}, sobre(turn=leer("1.0"))))
+    assert acto.fallos == []
+    assert acto.oferta == oferta()
+    assert all(
+        type(acto.oferta[c]) is int for c in ("quantity", "deliveryDays", "paymentDays")
+    )
+
+
 def test_precio_entero_y_ceros_finales_no_exigen_redondear() -> None:
     assert fallos(task({"offer": oferta(unitPrice=12)}, sobre())) == []
     assert fallos(task({"offer": oferta(unitPrice=leer("12.500"))}, sobre())) == []
@@ -149,8 +162,9 @@ def test_artifacts_sin_forma_es_missing_act(artifacts: Any) -> None:
         ("sessionId", "otra", "STATE_MISMATCH"),
         ("turn", None, "MISSING_FIELD"),
         ("turn", "1", "WRONG_TYPE"),  # R-02
-        ("turn", Decimal("1.0"), "WRONG_TYPE"),
         ("turn", True, "WRONG_TYPE"),
+        ("turn", Decimal("2.0"), "STATE_MISMATCH"),  # D-132: 2.0 es el entero 2
+        ("turn", Decimal("1.5"), "WRONG_TYPE"),
         ("turn", 2, "STATE_MISMATCH"),
         ("type", None, "MISSING_FIELD"),  # R-17
         ("type", "propose", "INVALID_FORMAT"),  # R-03
@@ -260,8 +274,7 @@ def test_cuerpo_no_valido(cuerpo: Any, tipo: str, turn: int, esperado: Fallo) ->
         ("currency", "eur", "INVALID_FORMAT"),
         ("currency", "USD", "STATE_MISMATCH"),
         ("quantity", "omitir", "MISSING_FIELD"),  # R-13
-        ("quantity", Decimal("10.0"), "WRONG_TYPE"),  # R-11
-        ("quantity", "10", "WRONG_TYPE"),
+        ("quantity", "10", "WRONG_TYPE"),  # R-11
         ("quantity", True, "WRONG_TYPE"),
         ("quantity", 0, "OUT_OF_RANGE"),  # R-13
         ("quantity", Decimal("10.5"), "PRECISION_EXCEEDED"),
@@ -274,6 +287,8 @@ def test_cuerpo_no_valido(cuerpo: Any, tipo: str, turn: int, esperado: Fallo) ->
         ("unitPrice", leer("12.50000000000000001"), "PRECISION_EXCEEDED"),  # D-37
         ("unitPrice", leer("1E+200000"), "OUT_OF_RANGE"),
         ("deliveryDays", "30", "WRONG_TYPE"),  # R-12
+        ("deliveryDays", Decimal("30.5"), "WRONG_TYPE"),
+        ("quantity", Decimal("0.0"), "OUT_OF_RANGE"),  # D-132: 0.0 es el entero 0
         ("paymentDays", -1, "OUT_OF_RANGE"),
         ("paymentDays", "omitir", "MISSING_FIELD"),
         ("total", 125, "UNKNOWN_FIELD"),  # R-05
