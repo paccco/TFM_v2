@@ -93,7 +93,13 @@ async def cerrar(entorno: Entorno, session_id: str) -> None:
             await _marcar(entorno, cierre, parte, envio)
 
     async with httpx.AsyncClient(follow_redirects=False, timeout=None) as cliente:
-        await asyncio.gather(*[enviar(cliente, p) for p in sorted(pendientes)])
+        # D-64: envíos independientes; un fallo al marcar uno no corta el otro.
+        errores = await asyncio.gather(
+            *[enviar(cliente, p) for p in sorted(pendientes)], return_exceptions=True
+        )
+    for error in errores:
+        if isinstance(error, BaseException):
+            raise error
 
 
 async def _enviar(

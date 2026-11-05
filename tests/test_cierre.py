@@ -17,6 +17,7 @@ import pytest
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 
+from orquestador import cierre
 from orquestador.cierre import cerrar
 from orquestador.cliente_agentes import a_json
 from orquestador.peticiones import URI_EXTENSION
@@ -424,3 +425,21 @@ def test_sin_el_arrendamiento_no_cierra(dsn: str, agentes: ServidorHttp) -> None
     asyncio.run(cerrar(ent, sid))
     assert agente.llamadas == []
     assert sesion(dsn)["estado"] == "CLOSING"
+
+
+def test_un_fallo_al_marcar_un_envio_no_falsea_el_otro(
+    dsn: str, agentes: ServidorHttp, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El envío que sigue en curso termina y se anota con su respuesta real."""
+    original = cierre._marcar
+
+    async def falla_el_comprador(*args: Any) -> None:
+        if args[2] == COMPRADOR:
+            raise RuntimeError("fallo simulado")
+        await original(*args)
+
+    monkeypatch.setattr(cierre, "_marcar", falla_el_comprador)
+    ent, sid, _ = sembrar(dsn, agentes, RETIRADA, pasos={VENDEDOR: Tarea(retraso=0.5)})
+    with pytest.raises(RuntimeError):
+        asyncio.run(cerrar(ent, sid))
+    assert [(f[1], f[3]) for f in envios(dsn)] == [(VENDEDOR, "ENVIADO")]
