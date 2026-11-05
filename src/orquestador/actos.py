@@ -2,7 +2,8 @@
 
 Solo detecta. En v0.1.0 toda sesión es `STRICT` (D-11), así que ningún fallo de R-01 a R-17
 se corrige. La Task llega como JSON con los números exactos: los enteros como `int` y el
-resto como `Decimal` (D-37, D-130). Es una función pura, sin base de datos ni red.
+resto como `Decimal` (D-37, D-130); un `Decimal` con parte decimal nula vale como entero
+(D-132). Es una función pura, sin base de datos ni red.
 """
 
 import re
@@ -20,6 +21,7 @@ CAMPOS_CUERPO = ("offer", "reason")
 TERMINOS_FIJOS = ("productId", "unit", "currency")  # D-36
 DIAS = ("deliveryDays", "paymentDays")
 CAMPOS_OFERTA = (*TERMINOS_FIJOS, "quantity", "unitPrice", *DIAS)
+ENTEROS = ("quantity", *DIAS)  # D-132
 # R-10: precio en forma textual que se podría normalizar.
 PRECIO_TEXTUAL = re.compile(r"[\s€$£]*\d+(?:[.,]\d+)?[\s€$£]*")
 # Máximo de cifras enteras de `numeric` en PostgreSQL: un precio mayor no se puede guardar.
@@ -73,7 +75,22 @@ def validar_acto(
     fallos += coherencia
     if fallos:
         return Acto(None, fallos=fallos)
+    if oferta is not None:  # D-132: se guarda y se reenvía con los enteros como `int`.
+        oferta = {c: _entero(v) if c in ENTEROS else v for c, v in oferta.items()}
     return Acto(tipo, oferta, reason)
+
+
+def _entero(valor: Any) -> int | None:
+    """D-132: un `int`, o un número con parte decimal nula (10.0 vale 10). Nunca bool."""
+    if type(valor) is int:
+        return valor
+    if (
+        isinstance(valor, Decimal)
+        and valor.is_finite()
+        and valor == valor.to_integral_value()
+    ):
+        return int(valor)
+    return None
 
 
 def _parte_de_acto(task: dict[str, Any]) -> tuple[Any, Any] | Fallo:
@@ -105,8 +122,8 @@ def _validar_sobre(
     def comprobar(campo: str, esperado: Any) -> None:
         if campo not in sobre:
             fallos.append(Fallo("MISSING_FIELD", f"envelope.{campo}"))
-        elif campo == "turn" and type(sobre[campo]) is not int:
-            fallos.append(Fallo("WRONG_TYPE", "envelope.turn"))  # R-02
+        elif campo == "turn" and _entero(sobre[campo]) is None:
+            fallos.append(Fallo("WRONG_TYPE", "envelope.turn"))  # R-02, D-132
         elif sobre[campo] != esperado:
             fallos.append(Fallo("STATE_MISMATCH", f"envelope.{campo}"))
 
@@ -189,8 +206,8 @@ def _validar_oferta(oferta: Any, terminos: dict[str, str]) -> list[Fallo]:
             and valor != valor.to_integral_value()
         ):
             fallo("PRECISION_EXCEEDED", campo)  # R-13: cantidad no entera
-        elif type(valor) is not int:
-            fallo("WRONG_TYPE", campo)  # R-11, R-12
+        elif _entero(valor) is None:
+            fallo("WRONG_TYPE", campo)  # R-11, R-12, D-132
         elif valor < (1 if campo == "quantity" else 0):
             fallo("OUT_OF_RANGE", campo)  # R-13
     for campo in oferta:
