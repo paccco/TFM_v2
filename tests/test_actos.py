@@ -272,7 +272,7 @@ def test_cuerpo_no_valido(cuerpo: Any, tipo: str, turn: int, esperado: Fallo) ->
         ("unitPrice", Decimal("-1.5"), "OUT_OF_RANGE"),
         ("unitPrice", Decimal("12.505"), "PRECISION_EXCEEDED"),
         ("unitPrice", leer("12.50000000000000001"), "PRECISION_EXCEEDED"),  # D-37
-        ("unitPrice", leer("1E+5000"), "OUT_OF_RANGE"),
+        ("unitPrice", leer("1E+200000"), "OUT_OF_RANGE"),
         ("deliveryDays", "30", "WRONG_TYPE"),  # R-12
         ("paymentDays", -1, "OUT_OF_RANGE"),
         ("paymentDays", "omitir", "MISSING_FIELD"),
