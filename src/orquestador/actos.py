@@ -26,6 +26,8 @@ ENTEROS = ("quantity", *DIAS)  # D-132
 PRECIO_TEXTUAL = re.compile(r"[\s€$£]*\d+(?:[.,]\d+)?[\s€$£]*")
 # Máximo de cifras enteras de `numeric` en PostgreSQL: un precio mayor no se puede guardar.
 MAX_CIFRAS_PRECIO = 131072
+# D-133: el mismo límite con el que `json` rechaza un entero literal; convertir más agota memoria.
+MAX_CIFRAS_ENTERO = 4300
 
 
 @dataclass(frozen=True)
@@ -93,6 +95,15 @@ def _entero(valor: Any) -> int | None:
     return None
 
 
+def _demasiado_grande(valor: Any) -> bool:
+    """D-133: 4300 cifras enteras o más. Se mira el exponente, sin convertir a entero."""
+    return (
+        isinstance(valor, Decimal)
+        and valor.is_finite()
+        and valor.adjusted() + 1 >= MAX_CIFRAS_ENTERO
+    )
+
+
 def _parte_de_acto(task: dict[str, Any]) -> tuple[Any, Any] | Fallo:
     """Paso 6 (D-23): exactamente un Artifact de acto, con exactamente una Part `data`."""
     artifacts = task.get("artifacts")
@@ -122,6 +133,8 @@ def _validar_sobre(
     def comprobar(campo: str, esperado: Any) -> None:
         if campo not in sobre:
             fallos.append(Fallo("MISSING_FIELD", f"envelope.{campo}"))
+        elif campo == "turn" and _demasiado_grande(sobre[campo]):
+            fallos.append(Fallo("OUT_OF_RANGE", "envelope.turn"))  # R-02, D-133
         elif campo == "turn" and _entero(sobre[campo]) is None:
             fallos.append(Fallo("WRONG_TYPE", "envelope.turn"))  # R-02, D-132
         elif sobre[campo] != esperado:
@@ -206,6 +219,8 @@ def _validar_oferta(oferta: Any, terminos: dict[str, str]) -> list[Fallo]:
             and valor != valor.to_integral_value()
         ):
             fallo("PRECISION_EXCEEDED", campo)  # R-13: cantidad no entera
+        elif _demasiado_grande(valor):
+            fallo("OUT_OF_RANGE", campo)  # R-13, D-133
         elif _entero(valor) is None:
             fallo("WRONG_TYPE", campo)  # R-11, R-12, D-132
         elif valor < (1 if campo == "quantity" else 0):
