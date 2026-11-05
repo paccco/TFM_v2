@@ -1,6 +1,6 @@
 # Máquina de estados
 
-Decisiones que la condicionan: D-04, D-05, D-07, D-08, D-20, D-23, D-25, D-46, D-49, D-51 a D-57, D-58 a D-71, D-77 y D-82 a D-122. D-58 sustituye a D-24.
+Decisiones que la condicionan: D-04, D-05, D-07, D-08, D-20, D-23, D-25, D-46, D-49, D-51 a D-57, D-58 a D-71, D-77 y D-82 a D-123. D-58 sustituye a D-24.
 
 Este documento define los estados por los que pasa una sesión, los subestados de cada turno, qué se guarda en el estado externalizado en cada transición, cómo se agrupan las sesiones en peticiones, cómo se cierra la sesión y qué restricciones impone todo ello a la configuración. El estado externalizado se guarda en PostgreSQL (D-69).
 
@@ -166,7 +166,7 @@ Las entradas se escriben una vez y nunca se modifican.
 |---|---|---|
 | Actos aceptados | Turno resuelto | `turn`, emisor, tipo, oferta o `reason`, `taskId`, instante |
 | Fallos | Fallo de un intento | `turn`, `attempt`, `taskId` si lo hay, `code`, `field`, instante |
-| Coerciones | Corrección aplicada | `turn`, `attempt`, `taskId`, `code`, `field`, valor original, valor corregido, decisión aplicada, instante |
+| Coerciones | Corrección aplicada | `turn`, `attempt`, `taskId`, `code`, `field`, valor original, valor corregido, decisión aplicada (el `R-xx` de la regla, D-123), instante |
 | Envíos de control | Envío de `AGREEMENT_HELD` o `SESSION_CLOSE` (D-70, D-85) | Tipo de mensaje, parte, `turn`, instante, resultado (enviado o fallido) y, según el caso, `taskId` y estado de la Task, indicación de Message o `code` del fallo (`AGENT_UNREACHABLE`, `TURN_TIMEOUT`, `AGENT_ERROR`) |
 | Peticiones del comprador | `OPEN_ROUND` o `RESOLVE_HOLDS` recibida, salvo duplicados (D-89, D-98, D-109) | Tipo y `sender` si se pudieron leer (D-103), `requestId` (salvo rechazo en ronda 1 o `requestId` no válido), ronda, `messageId`, `taskId` de la Task de la petición, resultado (aceptada o rechazada), códigos de rechazo, instante. En `RESOLVE_HOLDS`, la ronda es la última abierta de la petición, y falta si el `requestId` no es válido (D-118). El par `sender` + `messageId` es único |
 
@@ -260,6 +260,7 @@ El arrendamiento dura `turnTimeoutSeconds + pollIntervalSeconds` y no es configu
 
 ## 6. Preguntas abiertas
 - Comprobar en `feature/setup` que `a2a-sdk`, que implementa A2A 1.0, resuelve con Python 3.14 (D-13).
+- Comprobar en `feature/setup` que LangGraph resuelve con la misma versión de Python (D-13).
 - Fijar en `feature/setup` la versión de PostgreSQL y el controlador de Python (D-69).
 - Comprobar en `feature/setup` si `a2a-sdk` ofrece un almacén de Tasks en base de datos que sirva para las Tasks de las peticiones del comprador (D-97).
 - Fuera del orquestador: los agentes de las partes necesitan un almacén persistente de Tasks para que el sondeo sobreviva a sus reinicios y para detectar duplicados por `messageId` (D-66). Se decide al diseñar los agentes.

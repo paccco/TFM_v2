@@ -852,3 +852,11 @@ Decisiones tomadas al diseñar CU-07.
 - **Decisión:** tras confirmar la transacción de D-121, la misma instancia continúa con el envío de `SESSION_CLOSE` (CU-02) sin soltar el arrendamiento. Si cae antes de terminar, otra instancia retoma la sesión en `CLOSING` cuando el arrendamiento caduca, mediante la búsqueda de D-119. Precisa D-86; es el equivalente de D-115 para la caducidad.
 - **Motivo:** la instancia ya tiene el arrendamiento y la sesión, así que las partes reciben el cierre enseguida. Soltar el arrendamiento para acelerar la recuperación tras una caída abriría un hueco en el que otra instancia podría tomar la sesión mientras esta todavía envía. El resultado ya está guardado, así que el retraso de una recuperación no lo altera.
 - **Descartado:** liberar el arrendamiento tras la transición, como en D-96; dejar el cierre solo a la búsqueda periódica.
+
+## Reglas de autocorrección
+
+### D-123 · `autocorreccion.md` como fuente única, con prefijo `R-xx`
+- **Fecha:** 2026-11
+- **Decisión:** las reglas de autocorrección viven solo en `autocorreccion.md`, con identificador `R-xx`. `AC-cc-nn` significa siempre criterio de aceptación de una tarjeta. `protocolo.md` y las tarjetas citan las reglas por su `R-xx`; los criterios conservan su ejemplo concreto y añaden `(R-xx)`. Toda `R-xx` está cubierta por algún `AC-cc-nn`. En el registro de coerciones, la «decisión aplicada» es el `R-xx` de la regla; `code` se mantiene como vocabulario común (D-50). Las decisiones D-xx no se modifican y `autocorreccion.md` las cita.
+- **Motivo:** las reglas estaban repartidas entre `protocolo.md` y las tarjetas, y `AC-xx` tenía dos sentidos. Citar la regla en la coerción deja en la traza qué se aplicó y por qué.
+- **Descartado:** un campo nuevo en el registro de coerciones, porque «decisión aplicada» ya existe; sustituir los ejemplos de los criterios por la referencia, porque el test dejaría de salir del criterio.

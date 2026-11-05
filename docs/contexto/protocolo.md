@@ -1,6 +1,6 @@
 # Protocolo de negociación
 
-Decisiones que lo condicionan: D-10, D-11, D-17 a D-74, D-77 a D-94 y D-97 a D-118. D-32 sustituye a D-09, D-58 sustituye a D-24 y D-75 sustituye a D-03.
+Decisiones que lo condicionan: D-10, D-11, D-17 a D-74, D-77 a D-94, D-97 a D-118 y D-123. D-32 sustituye a D-09, D-58 sustituye a D-24 y D-75 sustituye a D-03.
 
 Vocabulario: una **parte** es cada participante de una sesión, comprador o vendedor (D-75). Su identificador es `partyId` y se fija en la configuración de la sesión (D-30, D-90). El **coordinador** es el componente del agente comprador que agrupa las sesiones de una petición (D-80).
 
@@ -43,20 +43,7 @@ confirma con `RESOLVE_HOLDS`. Si lo libera, o si vence el plazo de reserva
 (`holdTimeoutSeconds`), la sesión cierra con `outcome = RELEASED`.
 
 ### Reglas de coherencia por acto
-- El encaje del cuerpo con los esquemas de los actos se evalúa sobre el
-  cuerpo tal como llega, antes de descartar campos no definidos (D-34). Si
-  el tipo se corrige, el cuerpo se valida con el tipo corregido (D-72).
-- `PROPOSE` y `COUNTEROFFER` comparten cuerpo. En modo tolerante, si el
-  sobre indica uno de los dos, el tipo se corrige según el turno: turno 1 →
-  `PROPOSE`, en otro caso → `COUNTEROFFER` (D-44, D-73). Precisa D-26.
-- Un cuerpo vacío encaja con `ACCEPT` y `WITHDRAW`: si el sobre indica
-  otro tipo, el encaje es múltiple y no es corregible (D-26).
-- Un sobre `ACCEPT` o `WITHDRAW` con un cuerpo que trae oferta no es
-  corregible, con una excepción: en modo tolerante, un `ACCEPT` cuya
-  oferta es idéntica a la vigente tras normalizarla se mantiene como
-  `ACCEPT`, se descarta la oferta y se registra la coerción con
-  `ACT_BODY_MISMATCH` (D-73).
-- `ACCEPT` en el turno 1 no es corregible: se reintenta (D-23).
+La coherencia entre el tipo del sobre y el cuerpo sigue las reglas R-06, R-07, R-08, R-14 y R-16 de `autocorreccion.md`.
 
 ## Mensajes de control
 Van del orquestador a cada parte en el Message de `SendMessage`, con
@@ -260,12 +247,12 @@ Todo mensaje del protocolo lleva un sobre en
 sin `type` legible de D-106. Los nombres de campo van en inglés y
 camelCase (D-29).
 
-| Campo | Tipo | Obligatorio | Restricción | Corrección en modo tolerante (solo actos) |
+| Campo | Tipo | Obligatorio | Restricción | Autocorrección (solo actos) |
 |---|---|---|---|---|
-| `sessionId` | cadena (UUID) | En actos y control | Igual al identificador de la sesión en el estado externalizado (D-67) | Si falta o no coincide, se toma del estado |
-| `turn` | entero | En actos y control | ≥ 1. Contador único por sesión: empieza en 1 y sube cada vez que el turno pasa al otro agente. Los reintentos no lo cambian (D-08, D-33) | Una cadena numérica se convierte a entero; si no coincide, se toma del estado |
-| `type` | enumerado | Sí | Actos: `PROPOSE`, `COUNTEROFFER`, `ACCEPT`, `WITHDRAW`. Control: `TURN_REQUEST`, `AGREEMENT_HELD`, `SESSION_CLOSE`. Peticiones y su resultado: `OPEN_ROUND`, `RESOLVE_HOLDS` (D-32, D-85, D-88, D-104) | Se normalizan mayúsculas, espacios y guiones; si no coincide con el cuerpo, se aplica D-26 |
-| `sender` | cadena | Sí | En un acto: `partyId` de la parte con turno (D-30). En control y en el resultado de una petición: `ORCHESTRATOR` (D-104). En una petición: `partyId` del comprador (D-89) | En un acto, si falta o no es la parte con turno, se toma del estado |
+| `sessionId` | cadena (UUID) | En actos y control | Igual al identificador de la sesión en el estado externalizado (D-67) | R-01 |
+| `turn` | entero | En actos y control | ≥ 1. Contador único por sesión: empieza en 1 y sube cada vez que el turno pasa al otro agente. Los reintentos no lo cambian (D-08, D-33) | R-02 |
+| `type` | enumerado | Sí | Actos: `PROPOSE`, `COUNTEROFFER`, `ACCEPT`, `WITHDRAW`. Control: `TURN_REQUEST`, `AGREEMENT_HELD`, `SESSION_CLOSE`. Peticiones y su resultado: `OPEN_ROUND`, `RESOLVE_HOLDS` (D-32, D-85, D-88, D-104) | R-03, R-06, R-07, R-17 |
+| `sender` | cadena | Sí | En un acto: `partyId` de la parte con turno (D-30). En control y en el resultado de una petición: `ORCHESTRATOR` (D-104). En una petición: `partyId` del comprador (D-89) | R-04 |
 
 Las peticiones del comprador y su resultado no llevan `sessionId` ni
 `turn`, y su sobre nunca se corrige (D-89, D-93, D-104).
@@ -275,17 +262,10 @@ El orquestador envía `sessionId` y `turn` en cada petición de turno. El
 agente los devuelve sin modificar en el sobre de su acto.
 
 ### Criterio de corrección del sobre (D-31)
-Un campo del sobre de un acto solo se corrige cuando su valor correcto se
-puede conocer por el estado externalizado o por normalización
-determinista del propio valor. Nunca se deduce del contenido de la
-negociación. En modo estricto ningún campo se corrige: el fallo se
-registra y se pasa a reintento.
+Reglas R-01 a R-04 de `autocorreccion.md`.
 
 ### Campos no definidos (D-34)
-Un campo del sobre de un acto que no figure en esta tabla se descarta y
-se registra como coerción en modo tolerante. En modo estricto es fallo y
-se pasa a reintento. En el cuerpo, los campos no definidos se descartan
-después de evaluar el encaje (D-72). En una petición del comprador, un
+Un campo no definido en un acto sigue la regla R-05 de `autocorreccion.md`. En una petición del comprador, un
 campo no definido la rechaza con `UNKNOWN_FIELD`, también `sessionId` o
 `turn` en el sobre (D-89, D-93).
 
@@ -297,30 +277,21 @@ Los valores fijados por la sesión se definen en `configuracion-sesion.md`
 Una sesión negocia un único producto (D-35). Toda oferta lleva todos sus
 términos (D-10). Los nombres siguen D-29.
 
-| Campo | Tipo | Restricción | Origen | Corrección en modo tolerante |
+| Campo | Tipo | Restricción | Origen | Autocorrección |
 |---|---|---|---|---|
-| `productId` | cadena | Igual al de la configuración de la sesión | Sesión (D-36) | Si falta o no coincide, se toma de la sesión |
-| `unit` | cadena | Igual a la de la configuración de la sesión | Sesión (D-36) | Si falta o no coincide, se toma de la sesión |
-| `currency` | cadena | ISO 4217, igual a la de la configuración de la sesión | Sesión (D-36) | Se normaliza a mayúsculas; si falta o no coincide, se toma de la sesión |
-| `quantity` | entero | > 0 | Negociado | Una cadena numérica, o un número con parte decimal nula, se convierte a entero |
-| `unitPrice` | número, interpretado como decimal exacto (D-37) | > 0; máximo 2 decimales | Negociado | Se normalizan coma decimal, espacios y símbolo de moneda (`"12,50 €"` → 12.50) |
-| `deliveryDays` | entero | ≥ 0; días hasta la entrega | Negociado | Una cadena numérica se convierte a entero |
-| `paymentDays` | entero | ≥ 0; días de pago desde la entrega | Negociado | Una cadena numérica se convierte a entero |
+| `productId` | cadena | Igual al de la configuración de la sesión | Sesión (D-36) | R-09 |
+| `unit` | cadena | Igual a la de la configuración de la sesión | Sesión (D-36) | R-09 |
+| `currency` | cadena | ISO 4217, igual a la de la configuración de la sesión | Sesión (D-36) | R-09 |
+| `quantity` | entero | > 0 | Negociado | R-11, R-13 |
+| `unitPrice` | número, interpretado como decimal exacto (D-37) | > 0; máximo 2 decimales | Negociado | R-10, R-13 |
+| `deliveryDays` | entero | ≥ 0; días hasta la entrega | Negociado | R-12, R-13 |
+| `paymentDays` | entero | ≥ 0; días de pago desde la entrega | Negociado | R-12, R-13 |
 
 La oferta no incluye importe total (D-38). Quien necesite el importe lo
 calcula como `unitPrice × quantity` (D-81).
 
 ### Criterio de corrección de la oferta (D-39)
-Se aplica el mismo criterio que al sobre (D-31): solo se corrige lo que se
-conoce por la sesión o por normalización determinista del propio valor.
-No son corregibles, y pasan a reintento (D-23):
-- un término negociado ausente: nunca se rellena con la oferta anterior;
-- un valor fuera de rango (cantidad o precio ≤ 0, días < 0);
-- un valor que exigiría redondear (cantidad no entera, precio con más de
-  2 decimales).
-
-Un campo no definido en la tabla sigue la regla de D-34.
-En modo estricto no se corrige nada: se registra y se reintenta.
+Reglas R-09 a R-13 de `autocorreccion.md`. Un campo no definido sigue R-05.
 
 ## Correspondencia con A2A
 
@@ -418,25 +389,10 @@ agotados los reintentos, a ABORTAR (D-07), cuando:
   `data` cuyo `mediaType` sea el de acto.
 
 ### Alcance de la validación (D-22)
-La autocorrección actúa sobre el sobre y el cuerpo de los actos una vez
-interpretados como objetos: campos ausentes, tipos incorrectos y valores
-enumerados mal escritos. El JSON mal formado y el texto libre quedan
-fuera. Las peticiones del comprador no se autocorrigen (D-89).
+El alcance de la autocorrección está en `autocorreccion.md`, «Alcance».
 
 #### Fallo de coherencia entre sobre y cuerpo (D-26, D-72, D-73)
-Se produce cuando el tipo de acto del sobre no coincide con el esquema del
-cuerpo. El encaje se evalúa sobre el cuerpo tal como llega (D-72). Manda
-el cuerpo:
-- si el cuerpo encaja con el esquema de un único acto, en modo tolerante se
-  corrige el tipo del sobre y se registra la coerción; en modo estricto se
-  registra el fallo y se pasa a reintento;
-- si no encaja con ninguno o encaja con más de uno, no es corregible: se
-  registra el fallo y se pasa a reintento (D-23).
-
-La distinción por turno entre `PROPOSE` y `COUNTEROFFER` (D-44) solo se
-aplica cuando el sobre es uno de los dos. Un sobre `ACCEPT` o `WITHDRAW`
-con oferta no es corregible, salvo el `ACCEPT` con la oferta vigente
-repetida en modo tolerante (D-73).
+Se produce cuando el tipo de acto del sobre no coincide con el esquema del cuerpo. Reglas R-06, R-07, R-08, R-14 y R-16 de `autocorreccion.md`.
 
 ## Códigos de fallo
 
@@ -462,16 +418,16 @@ envíos de control no lleva campo.
 | `AGENT_ERROR` | El agente responde a `SendMessage` con un error A2A, en un turno o en un envío de control (D-71) | No |
 | `MISSING_ACT` | Ningún Artifact con Part `data` de acto, respuesta con Message (D-62) o Task desaparecida durante el sondeo (D-68) | No |
 | `MULTIPLE_ACTS` | Más de un Artifact de acto o más de una Part `data` | No |
-| `MISSING_FIELD` | Falta un campo obligatorio | Solo si su valor se conoce por el estado o la sesión |
-| `WRONG_TYPE` | Tipo incorrecto | Solo con conversión determinista; nunca para `reason` (D-74) |
-| `INVALID_FORMAT` | Formato normalizable | Sí |
-| `UNKNOWN_VALUE` | Valor enumerado no normalizable | No |
-| `STATE_MISMATCH` | Valor distinto del estado o de la sesión | Sí |
-| `OUT_OF_RANGE` | Valor fuera de rango | No |
-| `PRECISION_EXCEEDED` | El valor exigiría redondear | No |
-| `UNKNOWN_FIELD` | Campo no definido | Sí, descartándolo (D-34) |
-| `ACT_BODY_MISMATCH` | El sobre y el cuerpo no coinciden | Solo si el cuerpo encaja con un único acto (D-26), o si es un `ACCEPT` con la oferta vigente repetida (D-73) |
-| `ACT_NOT_ALLOWED` | Acto no permitido en el turno | Solo entre `PROPOSE` y `COUNTEROFFER`, por el turno (D-44) |
+| `MISSING_FIELD` | Falta un campo obligatorio | R-01, R-02, R-04, R-09. No en R-13 ni R-17 |
+| `WRONG_TYPE` | Tipo incorrecto | R-02, R-11, R-12. No en R-15 |
+| `INVALID_FORMAT` | Formato normalizable | R-03, R-09, R-10 |
+| `UNKNOWN_VALUE` | Valor enumerado no normalizable | No (R-17) |
+| `STATE_MISMATCH` | Valor distinto del estado o de la sesión | R-01, R-02, R-04, R-09 |
+| `OUT_OF_RANGE` | Valor fuera de rango | No (R-13) |
+| `PRECISION_EXCEEDED` | El valor exigiría redondear | No (R-13) |
+| `UNKNOWN_FIELD` | Campo no definido | R-05 |
+| `ACT_BODY_MISMATCH` | El sobre y el cuerpo no coinciden | R-06, R-08. No en R-14 ni R-16 |
+| `ACT_NOT_ALLOWED` | Acto no permitido en el turno | R-07. No en R-16 |
 | `INVALID_MESSAGE` | Un Message dirigido al orquestador no tiene forma de petición (D-103) | No aplica: rechazo |
 | `INVALID_CONFIG` | Una configuración de `OPEN_ROUND` incumple sus restricciones, hay un `itemId` repetido o el `partyId` del `BUYER` no es el mismo en todas las sesiones (D-89, D-91, D-102) | No aplica: rechazo |
 | `UNKNOWN_REQUEST` | `requestId` desconocido o cuyo comprador no es el `sender`, sin distinguir los dos casos (D-89, D-102, D-113) | No aplica: rechazo |
@@ -480,14 +436,15 @@ envíos de control no lleva campo.
 | `NOT_AUTHORIZED` | Solo en `OPEN_ROUND`: el `BUYER` es el mismo en todas las sesiones pero distinto del `sender` (D-89, D-102, D-113) | No aplica: rechazo |
 | `INVALID_REQUEST` | `RESOLVE_HOLDS` con las dos listas vacías, con una sesión en las dos o con un `sessionId` repetido en una lista (D-89, D-114, D-116) | No aplica: rechazo |
 
-En modo estricto ningún fallo se corrige. En las peticiones del comprador
+El modo estricto está en `autocorreccion.md`. En las peticiones del comprador
 cualquier código produce rechazo.
 
 ### Registro
 - **Fallo:** `code`, `field`, `turn`, `attempt`, `taskId` del intento si lo
   hay e instante.
 - **Coerción** (fallo corregido): `code`, `field`, `turn`, `attempt`,
-  `taskId`, valor original, valor corregido, decisión aplicada e instante.
+  `taskId`, valor original, valor corregido, decisión aplicada (el `R-xx`
+  de la regla, D-123) e instante.
 - **Envío de control** (D-70, D-85): tipo de mensaje (`AGREEMENT_HELD` o
   `SESSION_CLOSE`), parte, `turn`, instante, resultado (enviado o
   fallido) y, según el caso, `taskId` y estado de la Task, indicación de
