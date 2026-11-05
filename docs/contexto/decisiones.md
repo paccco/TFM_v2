@@ -931,3 +931,10 @@ Decisiones tomadas al implementar CU-01 y CU-03 en `feature/turnos`.
 - **Decisión:** en los campos enteros de un acto (`turn`, `quantity`, `deliveryDays`, `paymentDays`), un número JSON con parte decimal nula es un entero: 10.0 vale 10, en los dos modos y sin coerción. El orquestador lo guarda y lo reenvía como entero. Una cadena numérica sigue siendo `WRONG_TYPE` (R-02, R-11, R-12). Precisa D-130 y R-11.
 - **Motivo:** `a2a-sdk` guarda los datos como números protobuf de coma flotante y envía 10 como 10.0. Si no, ningún agente hecho con el SDK pasaría el modo estricto.
 - **Descartado:** volver al cliente del SDK, porque pierde el decimal exacto del precio (D-37); exigir a los agentes que no usen los tipos del SDK.
+- **Precisada por D-133.**
+
+### D-133 · Enteros demasiado grandes
+- **Fecha:** 2026-11
+- **Decisión:** en los campos enteros de un acto (`turn`, `quantity`, `deliveryDays`, `paymentDays`), un número con 4300 cifras enteras o más es `OUT_OF_RANGE`, no corregible, en los dos modos. No se convierte a entero. Precisa D-132, R-02 y R-13.
+- **Motivo:** convertir un número como 1E+999999999 agota la memoria del orquestador, y Python no escribe en JSON enteros de más de 4300 cifras. Es el mismo límite con el que la lectura de JSON ya rechaza un entero literal así de largo.
+- **Descartado:** `WRONG_TYPE`, porque el valor sí es un número entero; no poner límite.
