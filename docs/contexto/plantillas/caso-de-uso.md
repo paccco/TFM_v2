@@ -6,7 +6,7 @@
 | Objetivo | |
 | Precondiciones | Estado de la sesión, turno, modo de validación |
 | Disparador | |
-| Decisiones y reglas | D-xx, AC-xx |
+| Decisiones y reglas | D-xx, R-xx, AC-cc-01 a AC-cc-nn |
 
 ## Flujo principal
 1.

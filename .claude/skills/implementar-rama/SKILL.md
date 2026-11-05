@@ -31,7 +31,7 @@ Procedimiento para `docs/contexto/proceso.md` §8. Las reglas que cita (§N) est
 5. **`ponytail-review`** sobre el diff (§3). Aplica solo los recortes que no quiten nada exigido por `docs/contexto/`, vuelve a pasar tests y lint, y haz commit si has aplicado algo. Los descartados van al resumen con su motivo.
 6. **Documentación** (§9), en un commit:
    - Capítulos de `docs/latex/` indicados en la propuesta, siguiendo `docs/latex/CLAUDE.md`, y compilación de comprobación.
-   - La tarjeta pasa a «implementado» en `docs/contexto/casos-de-uso/README.md`.
+   - Si esta rama completa todos los AC de la tarjeta según `docs/contexto/roadmap.md`, la tarjeta pasa a «implementado» en `docs/contexto/casos-de-uso/README.md`. Si quedan AC para otra rama, sigue en «aprobado».
    - En `hotfix/`, entrada de la versión patch en `CHANGELOG.md` (§10).
    - En `hotfix/` que haya cambiado `docs/latex/`: PDF a `docs/pdfs/`, en un commit aparte.
 7. **Revisor** (§11), si el cambio toca su cometido, contra `develop` (contra `main` en `hotfix/`):

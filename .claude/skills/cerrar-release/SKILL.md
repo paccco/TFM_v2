@@ -1,6 +1,6 @@
 ---
 name: cerrar-release
-description: Propone, prepara y cierra una versión (rama release/) cuando se completa un hito importante del roadmap. Úsala cuando una funcionalidad marcada como importante en docs/contexto/roadmap.md pase a «implementado», o cuando el desarrollador pida una release.
+description: Propone, prepara y cierra una versión (rama release/) cuando se completa un hito importante del roadmap. Úsala cuando se cierre la rama de una funcionalidad marcada como importante en docs/contexto/roadmap.md, o cuando el desarrollador pida una release.
 ---
 
 # Cerrar una release
@@ -10,7 +10,7 @@ Procedimiento para `docs/contexto/proceso.md` §10. Las reglas que cita (§N) es
 ## Pasos
 
 1. **Comprobar el hito.** Si algo falla, para y lista lo que falta:
-   - Todas las funcionalidades del hito en `docs/contexto/roadmap.md` están «implementado» en `docs/contexto/casos-de-uso/README.md`.
+   - Todas las ramas del hito en `docs/contexto/roadmap.md` están fusionadas en `develop`.
    - No hay ramas `feature/` o `bugfix/` abiertas del hito.
    - `develop` pasa tests y lint, y los dos documentos de `docs/latex/` compilan.
 2. **Proponer la versión** (numeración en §10) y detenerte hasta un «aprobado» (§5):

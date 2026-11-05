@@ -2,7 +2,7 @@
 
 ## Qué es
 
-Orquestador que media en negociaciones de compraventa entre negocios, llevadas a cabo por agentes que hablan el protocolo A2A, y que corrige en caliente los fallos de **estructura** de los mensajes mediante reglas deterministas. TFM del Máster en Ingeniería Informática (UGR) en colaboración con Unicaja.
+Orquestador que media en negociaciones de compraventa entre un comprador, particular o negocio, y vendedores que son negocios (D-75), llevadas a cabo por agentes que hablan el protocolo A2A, y que corrige en caliente los fallos de **estructura** de los mensajes mediante reglas deterministas. TFM del Máster en Ingeniería Informática (UGR) en colaboración con Unicaja.
 
 ## Cómo trabajamos
 
@@ -22,7 +22,8 @@ docs/
     roadmap.md           Hitos y funcionalidades que dan lugar a release
     protocolo.md         Actos, esquema de mensajes, ofertas
     maquina-estados.md   Estados y transiciones de una sesión de negociación
-    autocorreccion.md    Catálogo de reglas de autocorrección (AC-xx)
+    configuracion-sesion.md  Valores con los que se ejecuta cada sesión
+    autocorreccion.md    Catálogo de reglas de autocorrección (R-xx)
     casos-de-uso/        Tarjetas CU-xx e índice con su estado
     plantillas/          Plantillas para gemini-analista
   latex/                 Lo que lee una persona. Reglas de redacción en latex/CLAUDE.md
@@ -40,12 +41,12 @@ tests/
 ## Stack
 
 - Lenguaje: Python 3.14, provisional hasta que `feature/setup` confirme que LangGraph y el SDK de A2A resuelven con ella; si no, 3.13 con aprobación del desarrollador (D-13)
-- Agentes de las empresas: LangGraph, expuestos tras A2A
+- Agentes de las partes: LangGraph, expuestos tras A2A
 - Gestor de entorno y dependencias: `uv` (las dependencias se añaden con `uv add`, nunca con `pip`; `uv.lock` se versiona)
 - Tests: `pytest`
 - Lint y formato: `ruff`
 - Tipos: anotaciones en todo el código, sin comprobador de tipos por ahora
-- Almacén del estado externalizado: `<por decidir tras diseñar maquina-estados.md>`
+- Almacén del estado externalizado: PostgreSQL (D-69); versión y controlador se fijan en `feature/setup`
 - Documentación: LaTeX, sin plantilla institucional, compilada con `latexmk` y LuaLaTeX
 - Modelos externos: Gemini vía `llm` (ver `proceso.md` §12)
 
