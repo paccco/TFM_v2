@@ -1,6 +1,6 @@
 \chapter{Protocolo}
 
-Este capítulo explica lo implementado del protocolo: las peticiones del comprador y los turnos con los agentes de las partes. Los mensajes \texttt{AGREEMENT\_HELD} y \texttt{SESSION\_CLOSE} están pendientes de implementar.
+Este capítulo explica lo implementado del protocolo: las peticiones del comprador, los turnos con los agentes de las partes y el cierre con \texttt{SESSION\_CLOSE}. El mensaje \texttt{AGREEMENT\_HELD} está pendiente de implementar.
 
 \section{Peticiones del comprador}
 
@@ -109,3 +109,34 @@ Por la misma razón, un agente hecho con el SDK envía el entero 10 como 10.0. E
 \subsection{Cabeceras y métodos}
 
 El cliente llama a \texttt{SendMessage}, \texttt{GetTask} y \texttt{CancelTask} por JSON-RPC, con las cabeceras \texttt{A2A-Extensions: urn:tfm:negociacion:v1} y \texttt{A2A-Version: 1.0}. Sin la segunda, un servidor hecho con el SDK supone la versión 0.3 del protocolo. No sigue redirecciones: la URL que llama es la de la AgentCard, ya comprobada contra los orígenes permitidos (D-129, D-131).
+
+\section{\texttt{SESSION\_CLOSE}}
+
+Cuando la sesión entra en \texttt{CLOSING}, el orquestador comunica el resultado a las dos partes (CU-02). Se envía como el \texttt{TURN\_REQUEST}, en el Message de \texttt{SendMessage} con \texttt{returnImmediately = true}, pero con un \texttt{messageId} nuevo que no se guarda (D-64). El \texttt{contextId} solo va si la parte lo tiene: si la sesión cierra en el turno 1, la parte que no abre nunca lo recibió. El \texttt{turn} del sobre es el del turno que provocó el cierre.
+
+\begin{verbatim}
+metadata["urn:tfm:negociacion:v1"]:
+  { "sessionId": "...", "turn": 3,
+    "type": "SESSION_CLOSE", "sender": "ORCHESTRATOR" }
+
+Part data:
+  { "outcome": "WITHDRAWN", "withdrawnBy": "comprador-1",
+    "lastOffers": [
+      { "partyId": "comprador-1", "offer": { ... } },
+      { "partyId": "vendedor-1", "offer": { ... } } ] }
+\end{verbatim}
+
+El cuerpo lleva \texttt{outcome} y solo los campos que le corresponden (AC-02-03):
+
+\begin{tabular}{p{3.5cm}p{10cm}}
+  \textbf{\texttt{outcome}} & \textbf{Campos} \\
+  \texttt{AGREEMENT} & \texttt{agreedOffer}, sin \texttt{lastOffers}. \\
+  \texttt{WITHDRAWN} & \texttt{withdrawnBy}. El \texttt{reason} del \texttt{WITHDRAW} no viaja: queda en el registro de actos aceptados. \\
+  \texttt{NO\_AGREEMENT} & Ninguno más. \\
+  \texttt{ABORTED} & \texttt{abortReason = RETRIES\_EXHAUSTED} y \texttt{lastFailure}. \\
+  \texttt{RELEASED} & \texttt{releaseReason}. \\
+\end{tabular}
+
+Salvo en \texttt{AGREEMENT}, el cuerpo lleva \texttt{lastOffers} si alguna parte llegó a ofertar (D-82). \texttt{AGREEMENT} y \texttt{RELEASED} solo aparecen cuando la sesión sale de \texttt{HELD}, que aún no está implementado.
+
+La respuesta no se valida (D-49): una Task en cualquier estado o un Message marcan el envío como enviado. No se sondea ni se envía \texttt{CancelTask}. Un error de red, la falta de respuesta en \texttt{turnTimeoutSeconds} o un error A2A lo marcan como fallido, con \texttt{AGENT\_UNREACHABLE}, \texttt{TURN\_TIMEOUT} o \texttt{AGENT\_ERROR}, sin reintento (D-64, D-71). Una respuesta que no es Task ni Message no está en la especificación: mientras no se decida, se anota como \texttt{AGENT\_ERROR}.

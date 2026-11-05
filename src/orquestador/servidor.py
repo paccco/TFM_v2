@@ -43,6 +43,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from orquestador.almacen import leer_task
+from orquestador.cierre import cerrar
 from orquestador.peticiones import (
     MEDIA_PETICION,
     MEDIA_RESULTADO,
@@ -103,11 +104,16 @@ class Manejador(RequestHandler):
         self._lanzar(self._negociar(session_id))
 
     async def _negociar(self, session_id: str) -> None:
-        """CU-01 y CU-03. Si algo falla, la sesión queda guardada para otra instancia (D-63)."""
+        """CU-01 y CU-03 y, si la sesión queda en `CLOSING`, CU-02 con el mismo arrendamiento.
+
+        Si algo falla, la sesión queda guardada para otra instancia (D-63). `cerrar` no hace
+        nada si la sesión no está en `CLOSING` (por ejemplo, en `HELD`).
+        """
         try:
             await negociar(self._entorno, session_id)
+            await cerrar(self._entorno, session_id)
         except Exception:
-            logger.exception("Fallo al negociar la sesión %s", session_id)
+            logger.exception("Fallo al negociar o cerrar la sesión %s", session_id)
 
     def _lanzar(self, trabajo: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
         """Guarda la referencia mientras dura, para que no se pierda la tarea."""

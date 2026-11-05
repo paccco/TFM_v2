@@ -162,6 +162,7 @@ def test_camino_valido_sin_return_immediately_espera_al_resultado(
     """Paso 7 de CU-04: sin `returnImmediately`, responde al completarse.
 
     D-94: no espera a la negociación, que empieza después de comprobar las AgentCards.
+    CU-02: tras el `WITHDRAW`, la misma instancia envía `SESSION_CLOSE` y la cierra.
     """
     agentes.rpc = Agente(dsn, {1: [TRABAJANDO, acto("WITHDRAW")]})
     task = enviar(orquestador, open_round(config(agentes)))
@@ -172,10 +173,12 @@ def test_camino_valido_sin_return_immediately_espera_al_resultado(
         assert c.execute("SELECT estado FROM sesiones").fetchall() == [("NEGOTIATING",)]
         for _ in range(50):
             [(estado,)] = c.execute("SELECT estado FROM sesiones").fetchall()
-            if estado != "NEGOTIATING":
+            if estado == "CLOSED":
                 break
             time.sleep(0.1)
-    assert estado == "CLOSING"
+        envios = c.execute("SELECT tipo, resultado FROM envios_control").fetchall()
+    assert estado == "CLOSED"
+    assert envios == [("SESSION_CLOSE", "ENVIADO")] * 2
 
 
 def test_return_immediately_responde_enseguida_y_completa_despues(
@@ -333,7 +336,7 @@ def test_d_63_un_fallo_al_comprobar_una_sesion_no_para_las_demas(
     with psycopg.connect(dsn) as c:
         for _ in range(50):
             estados = sorted(e for (e,) in c.execute("SELECT estado FROM sesiones"))
-            if estados == ["CLOSING", "CREATED"]:
+            if estados == ["CLOSED", "CREATED"]:
                 break
             time.sleep(0.1)
-    assert estados == ["CLOSING", "CREATED"]
+    assert estados == ["CLOSED", "CREATED"]

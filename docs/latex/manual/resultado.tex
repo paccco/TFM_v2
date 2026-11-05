@@ -1,0 +1,43 @@
+\chapter{Leer el resultado}
+
+Cada sesión termina en uno de estos estados de la columna \texttt{estado} de la tabla \texttt{sesiones}:
+
+\begin{tabular}{lp{10cm}}
+  \textbf{Estado} & \textbf{Qué significa} \\
+  \texttt{NOT\_STARTED} & No llegó a negociar: la AgentCard de \texttt{failed\_party\_id} no se pudo obtener o no es válida. \\
+  \texttt{HELD} & Hay un acuerdo provisional. Su oferta está en \texttt{oferta\_acordada} y su plazo en \texttt{held\_until}. \\
+  \texttt{CLOSING} & El resultado está decidido; el orquestador está avisando a las partes. \\
+  \texttt{CLOSED} & El orquestador ha avisado a las dos partes, o lo ha intentado. Es el estado final. \\
+\end{tabular}
+
+\section{El resultado}
+
+En \texttt{CLOSING} y \texttt{CLOSED}, la columna \texttt{resultado} dice cómo terminó la negociación. Es lo mismo que reciben las partes en \texttt{SESSION\_CLOSE}, salvo el motivo de una retirada, que solo queda aquí.
+
+\begin{tabular}{lp{9.5cm}}
+  \textbf{\texttt{outcome}} & \textbf{Qué ha pasado} \\
+  \texttt{WITHDRAWN} & Una parte se retiró. \texttt{withdrawnBy} dice cuál y \texttt{reason}, su motivo si lo dio. \\
+  \texttt{NO\_AGREEMENT} & Se agotaron los turnos sin acuerdo. \\
+  \texttt{ABORTED} & Un agente falló. \texttt{lastFailure} dice el primer fallo, con su código y su campo. \\
+\end{tabular}
+
+En los tres casos, \texttt{lastOffers} recoge la última oferta de cada parte que llegó a ofertar. Si nadie ofertó, por ejemplo con una retirada en el turno 1, no aparece.
+
+\section{Si una parte no recibió el aviso}
+
+La columna \texttt{envios\_close} dice, por parte, si \texttt{SESSION\_CLOSE} se envió (\texttt{ENVIADO}) o falló (\texttt{FALLIDO}). La tabla \texttt{envios\_control} da el detalle de cada envío: cuándo se resolvió y, si falló, por qué.
+
+\begin{tabular}{lp{9.5cm}}
+  \textbf{\texttt{code}} & \textbf{Qué revisar} \\
+  \texttt{AGENT\_UNREACHABLE} & El agente no estaba accesible: red, dirección o servidor caído. \\
+  \texttt{TURN\_TIMEOUT} & El agente no respondió en \texttt{turnTimeoutSeconds}. \\
+  \texttt{AGENT\_ERROR} & El agente respondió con un error A2A, o con algo que no es ni una Task ni un Message. \\
+\end{tabular}
+
+Un aviso fallido no cambia el resultado ni se reintenta: la sesión pasa igualmente a \texttt{CLOSED}.
+
+\section{Detalle de la negociación}
+
+Los actos aceptados están, uno por turno, en la tabla \texttt{actos\_aceptados}, y los fallos de los agentes, uno por fila, en \texttt{fallos}.
+
+Ante \texttt{TASK\_INTERRUPTED} con un agente hecho con \texttt{a2a-sdk}, comprueba que el agente publica su Task en \texttt{TASK\_STATE\_SUBMITTED}: una Task sin estado cuenta como interrumpida.
