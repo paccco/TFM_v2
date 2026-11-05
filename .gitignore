@@ -1,0 +1,50 @@
+# Secretos
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+
+# Claude Code: ajustes personales
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# LaTeX: ficheros auxiliares y PDF compilados fuera de docs/pdfs/
+docs/latex/**/*.aux
+docs/latex/**/*.toc
+docs/latex/**/*.out
+docs/latex/**/*.lof
+docs/latex/**/*.lot
+docs/latex/**/*.fls
+docs/latex/**/*.fdb_latexmk
+docs/latex/**/*.synctex.gz
+docs/latex/**/*.bbl
+docs/latex/**/*.blg
+docs/latex/**/*.bcf
+docs/latex/**/*.run.xml
+docs/latex/**/*.pdf
+docs/latex/**/build/
+
+# Logs y datos locales
+logs/
+*.log
+data/
+
+# Editor y sistema
+.vscode/
+.idea/
+.DS_Store

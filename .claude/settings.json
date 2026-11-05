@@ -1,0 +1,68 @@
+{
+  "env": {
+    "PONYTAIL_SUBAGENT_MATCHER": "^(?!(revisor|explorador)$)"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch --list:*)",
+      "Bash(git branch -a)",
+      "Bash(git switch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(files-to-prompt:*)",
+      "Bash(latexmk:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv run:*)",
+      "Bash(uv lock:*)",
+      "Bash(uv tree:*)",
+      "Bash(llm -m gemini-lector:*)",
+      "Bash(llm -m gemini-analista:*)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(git tag:*)",
+      "Bash(git flow:*)",
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(git reset:*)",
+      "Bash(uv add:*)",
+      "Bash(uv remove:*)",
+      "Bash(uv python:*)",
+      "Edit(docs/contexto/proceso.md)",
+      "Write(docs/contexto/proceso.md)",
+      "Edit(docs/contexto/decisiones.md)",
+      "Edit(docs/contexto/protocolo.md)",
+      "Edit(docs/contexto/maquina-estados.md)",
+      "Edit(docs/contexto/autocorreccion.md)",
+      "Write(docs/contexto/decisiones.md)",
+      "Write(docs/contexto/protocolo.md)",
+      "Write(docs/contexto/maquina-estados.md)",
+      "Write(docs/contexto/autocorreccion.md)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/.env)",
+      "Read(./**/.env.*)",
+      "Read(./secrets/**)",
+      "Read(./**/*.pem)",
+      "Read(./**/*.key)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git switch -c:*)",
+      "Bash(git switch --create:*)",
+      "Bash(git checkout -b:*)",
+      "Bash(pip install:*)",
+      "Bash(pip3 install:*)",
+      "Bash(uv pip install:*)",
+      "Bash(llm keys:*)",
+      "Bash(llm aliases set:*)",
+      "Bash(llm aliases remove:*)",
+      "Bash(cat .env:*)"
+    ]
+  }
+}
