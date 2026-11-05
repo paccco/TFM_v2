@@ -12,7 +12,13 @@ from typing import Any
 import psycopg
 import pytest
 import uvicorn
-from a2a.types.a2a_pb2 import AgentCapabilities, AgentCard, AgentExtension
+from a2a.types.a2a_pb2 import (
+    AgentCapabilities,
+    AgentCard,
+    AgentExtension,
+    AgentInterface,
+)
+from a2a.utils.constants import TransportProtocol
 from google.protobuf.json_format import MessageToDict
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -30,12 +36,19 @@ from orquestador.peticiones import URI_EXTENSION
 # Credenciales solo de desarrollo, las de docker-compose.yml.
 DSN_BASE = os.environ.get("DATABASE_URL", "postgresql://tfm:tfm@127.0.0.1:55432/tfm")
 ESQUEMA_PRUEBAS = "pruebas_orquestador"
+RUTA_AGENTE = "/a2a"
 
 
-def tarjeta(uri: str = URI_EXTENSION, requerida: bool = True) -> dict[str, Any]:
+def tarjeta(
+    url: str = "",
+    uri: str = URI_EXTENSION,
+    requerida: bool = True,
+    binding: str = TransportProtocol.JSONRPC,
+) -> dict[str, Any]:
     return MessageToDict(
         AgentCard(
             name="agente de prueba",
+            supported_interfaces=[AgentInterface(url=url, protocol_binding=binding)],
             capabilities=AgentCapabilities(
                 extensions=[AgentExtension(uri=uri, required=requerida)]
             ),
@@ -55,23 +68,29 @@ def _app_de_tarjetas(servidor: ServidorHttp) -> Starlette:
     async def responder(request: Request) -> Response:
         ruta = request.url.path
         servidor.visitas.append(f"{request.method} {ruta}")
+        # D-131: la URL de servicio de cada AgentCard apunta a este mismo servidor.
+        servicio = f"{servidor.url}{RUTA_AGENTE}"
         if ruta == "/opcional.json":
-            return JSONResponse(tarjeta(requerida=False))
+            return JSONResponse(tarjeta(servicio, requerida=False))
         if ruta == "/sin.json":
-            return JSONResponse(tarjeta(uri="urn:otra"))
+            return JSONResponse(tarjeta(servicio, uri="urn:otra"))
+        if ruta == "/sin-jsonrpc.json":
+            return JSONResponse(tarjeta(servicio, binding=TransportProtocol.GRPC))
+        if ruta == "/fuera.json":
+            return JSONResponse(tarjeta(f"http://otro.invalid:9{RUTA_AGENTE}"))
         if ruta == "/lenta.json":
             await asyncio.sleep(3)
-            return JSONResponse(tarjeta())
+            return JSONResponse(tarjeta(servicio))
         if ruta == "/seis-segundos.json":
             await asyncio.sleep(6)
-            return JSONResponse(tarjeta())
+            return JSONResponse(tarjeta(servicio))
         if ruta == "/basura.json":
             return PlainTextResponse("esto no es una AgentCard")
         if ruta == "/error.json":
             return PlainTextResponse("fallo", status_code=500)
         if ruta == "/redirige.json":
             return RedirectResponse("/con.json", status_code=302)
-        return JSONResponse(tarjeta())
+        return JSONResponse(tarjeta(servicio))
 
     return Starlette(routes=[Route("/{ruta:path}", responder, methods=["GET", "POST"])])
 

@@ -22,7 +22,7 @@ from orquestador.peticiones import (
     origen,
 )
 from orquestador.rondas import Entorno, comprobar_sesion, recibir_peticion
-from tests.conftest import ServidorHttp
+from tests.conftest import RUTA_AGENTE, ServidorHttp
 
 COMPRADOR = "comprador-1"
 VENDEDOR = "vendedor-1"
@@ -171,6 +171,31 @@ def test_ac_04_05_agentcards_validas_pasan_a_negotiating(
     assert (estado, subestado, turn, attempt) == ("NEGOTIATING", "READY", 1, 1)
     assert message_id
     assert fallida is None
+
+
+def test_d_131_guarda_la_url_de_servicio_de_cada_parte(
+    dsn: str, agentes: ServidorHttp
+) -> None:
+    ent = entorno(dsn, agentes)
+    r = recibir(ent, mensaje(config(agentes)))
+    asyncio.run(comprobar_sesion(ent, r.sesiones[0]))
+    servicio = f"{agentes.url}{RUTA_AGENTE}"
+    assert filas(dsn, "SELECT urls_servicio FROM sesiones") == [
+        ({COMPRADOR: servicio, VENDEDOR: servicio},)
+    ]
+
+
+@pytest.mark.parametrize("vendedor", ["sin-jsonrpc", "fuera"])
+def test_d_131_url_de_servicio_no_valida_deja_not_started(
+    dsn: str, agentes: ServidorHttp, vendedor: str
+) -> None:
+    """Sin interfaz JSON-RPC, o con una URL de servicio de un origen no permitido."""
+    ent = entorno(dsn, agentes)
+    r = recibir(ent, mensaje(config(agentes, vendedor=vendedor)))
+    asyncio.run(comprobar_sesion(ent, r.sesiones[0]))
+    assert filas(
+        dsn, "SELECT estado, failed_party_id, urls_servicio FROM sesiones"
+    ) == [("NOT_STARTED", VENDEDOR, None)]
 
 
 @pytest.mark.parametrize(
