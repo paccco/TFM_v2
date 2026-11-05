@@ -1,1 +1,45 @@
 \chapter{Instalación}
+
+Este capítulo deja el entorno listo y comprueba que funciona. El orquestador todavía no tiene funcionalidad que ejecutar.
+
+\section{Requisitos}
+
+\begin{itemize}
+  \item \texttt{uv}, que gestiona Python y las dependencias (D-12). Si falta Python 3.14, se instala con \texttt{uv python install 3.14} (D-13).
+  \item Docker con Compose, para PostgreSQL (D-69).
+  \item \texttt{latexmk} y LuaLaTeX, solo para compilar la documentación.
+\end{itemize}
+
+\section{Pasos}
+
+Instala las dependencias desde \texttt{uv.lock}:
+
+\begin{verbatim}
+uv sync
+\end{verbatim}
+
+Levanta PostgreSQL y espera a que esté listo:
+
+\begin{verbatim}
+docker compose up -d --wait
+\end{verbatim}
+
+Comprueba la instalación:
+
+\begin{verbatim}
+uv run pytest
+\end{verbatim}
+
+Todos los tests deben pasar. Los que usan la base de datos fallan con \texttt{Connection refused} si PostgreSQL no está levantado.
+
+\section{Base de datos}
+
+El contenedor usa el puerto 55432 y solo acepta conexiones desde el propio equipo. Por eso no choca con un PostgreSQL local en el puerto 5432. Sus credenciales son solo para desarrollo.
+
+Los tests usan la variable de entorno \texttt{DATABASE\_URL} si está definida y, si no, la conexión al contenedor.
+
+Para parar el contenedor sin perder los datos:
+
+\begin{verbatim}
+docker compose stop
+\end{verbatim}

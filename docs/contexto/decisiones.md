@@ -72,6 +72,7 @@ Formato de cada entrada: ID, fecha, decisión, motivo, alternativas descartadas.
 - **Fecha:** 2026-11
 - **Decisión:** Python 3.14, provisional hasta que `feature/setup` confirme que LangGraph y el SDK de A2A resuelven con ella. Si no, 3.13, con aprobación del desarrollador.
 - **Descartado:** 3.15, por recién publicada (riesgo de dependencias sin soporte).
+- **Precisada por D-124.**
 
 ### D-14 · Tests
 - **Fecha:** 2026-11
@@ -409,7 +410,7 @@ Diseño completo en `maquina-estados.md`.
 - **Decisión:** el estado externalizado se guarda en PostgreSQL. El registro de sesión y los registros de solo añadir (actos aceptados, fallos y coerciones) son tablas de la misma base de datos y se escriben en la misma transacción. Arrendamientos e instantes se miden con el reloj del servidor de base de datos. La versión de PostgreSQL y el controlador de Python se fijan en `feature/setup`.
 - **Motivo:** cumple todos los requisitos de `maquina-estados.md` sin piezas extra: transacciones entre tablas, escritura condicional por versión (D-63, D-67), un único reloj (D-65), búsqueda de sesiones con el arrendamiento caducado y consultas para el análisis.
 - **Descartado:** SQLite, porque limita la recuperación a la misma máquina; Redis, por las transacciones entre estructuras y el análisis; Firestore, por la dependencia de un proveedor y la dificultad de los tests.
-- **Precisada por D-107.**
+- **Precisada por D-107 y D-125.**
 
 ## Cierre y validación de actos
 
@@ -647,7 +648,7 @@ Decisiones tomadas al diseñar CU-04.
   `GetTask` del coordinador se responde con la Task guardada. En `feature/setup` se comprueba si `a2a-sdk` ofrece un almacén de Tasks en base de datos que sirva para esto. Precisa D-04, D-88 y D-94.
 - **Motivo:** con la Task en memoria, una caída entre crear las sesiones y completar la Task dejaría la petición sin respuesta, en contra de D-04. Escribirla en la misma transacción que las sesiones mantiene la atomicidad de D-63.
 - **Descartado:** almacén de Tasks en memoria; almacén de Tasks en una pieza aparte de la base de datos.
-- **Precisada por D-110.**
+- **Precisada por D-110 y D-126.**
 
 ### D-98 · `OPEN_ROUND` duplicado
 - **Fecha:** 2026-11
@@ -860,3 +861,20 @@ Decisiones tomadas al diseñar CU-07.
 - **Decisión:** las reglas de autocorrección viven solo en `autocorreccion.md`, con identificador `R-xx`. `AC-cc-nn` significa siempre criterio de aceptación de una tarjeta. `protocolo.md` y las tarjetas citan las reglas por su `R-xx`; los criterios conservan su ejemplo concreto y añaden `(R-xx)`. Toda `R-xx` está cubierta por algún `AC-cc-nn`. En el registro de coerciones, la «decisión aplicada» es el `R-xx` de la regla; `code` se mantiene como vocabulario común (D-50). Las decisiones D-xx no se modifican y `autocorreccion.md` las cita.
 - **Motivo:** las reglas estaban repartidas entre `protocolo.md` y las tarjetas, y `AC-xx` tenía dos sentidos. Citar la regla en la coerción deja en la traza qué se aplicó y por qué.
 - **Descartado:** un campo nuevo en el registro de coerciones, porque «decisión aplicada» ya existe; sustituir los ejemplos de los criterios por la referencia, porque el test dejaría de salir del criterio.
+
+### D-124 · Python 3.14 confirmada
+- **Fecha:** 2026-11
+- **Decisión:** el proyecto usa Python 3.14. `a2a-sdk` 1.3.0, que implementa A2A 1.0 (`PROTOCOL_VERSION_CURRENT = '1.0'`), y LangGraph 1.2.20 resuelven con ella. Cierra la provisionalidad de D-13.
+- **Motivo:** comprobado en `feature/setup` con `uv add` y, para LangGraph, con `uv lock` en un proyecto temporal.
+
+### D-125 · PostgreSQL 18.6 y psycopg
+- **Fecha:** 2026-11
+- **Decisión:** PostgreSQL 18.6, en contenedor para desarrollo y tests, y `psycopg` como controlador. Precisa D-69.
+- **Motivo:** en la prueba real, `psycopg` y `asyncpg` cumplen lo mismo y la diferencia es de 0,07 ms por transacción. `psycopg` da `rowcount` como entero, más legible en la escritura condicional de D-63.
+- **Descartado:** `asyncpg`, porque devuelve el resultado como texto; PostgreSQL 17, por ser anterior.
+
+### D-126 · Tabla y TaskStore propios para las Tasks
+- **Fecha:** 2026-11
+- **Decisión:** el orquestador guarda las Tasks de las peticiones del comprador en una tabla propia, dentro de su transacción, con una implementación propia de la interfaz `TaskStore` de `a2a-sdk`. Queda por comprobar cómo llama el manejador del SDK a `save` al implementar D-87. Precisa D-97.
+- **Motivo:** D-97 exige la misma transacción que las sesiones, y `save` abre y confirma su propia sesión en los dos almacenes de `a2a-sdk` 1.3.0.
+- **Descartado:** `DatabaseTaskStore` y `VersionedDatabaseTaskStore`, por ese motivo.

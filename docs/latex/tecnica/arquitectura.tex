@@ -1,1 +1,32 @@
 \chapter{Arquitectura}
+
+Este capítulo recoge por ahora el stack. Los componentes del orquestador están pendientes de implementar.
+
+\section{Stack}
+
+\begin{tabular}{ll}
+  \textbf{Pieza} & \textbf{Elección} \\
+  Lenguaje & Python 3.14 (D-13, D-124) \\
+  Entorno y dependencias & \texttt{uv} (D-12) \\
+  Protocolo & A2A 1.0 con \texttt{a2a-sdk} 1.3.0 (D-17) \\
+  Almacén del estado & PostgreSQL 18.6 (D-69, D-125) \\
+  Controlador de PostgreSQL & \texttt{psycopg} 3.3.8 (D-125) \\
+  Tests & \texttt{pytest} (D-14) \\
+  Lint y formato & \texttt{ruff} (D-15) \\
+\end{tabular}
+
+LangGraph resuelve con Python 3.14 (versión 1.2.20), pero aún no es una dependencia del proyecto. Se añade cuando se implementen los agentes.
+
+\section{Comprobaciones de la base de datos}
+
+Los tests de \texttt{tests/test\_setup.py} usan PostgreSQL real, sin simulaciones. Comprueban lo que el diseño pide a la base de datos:
+
+\begin{itemize}
+  \item Una transacción entre dos tablas se deshace entera si algo falla (D-63, D-69).
+  \item Una escritura condicional por versión se aplica una sola vez: la segunda con la misma versión no afecta a ninguna fila (D-63).
+  \item El reloj del servidor se puede leer y da la hora con zona horaria (D-69).
+\end{itemize}
+
+\section{Tasks de las peticiones del comprador}
+
+D-97 exige escribir cada Task en la misma transacción que las sesiones. Los almacenes de \texttt{a2a-sdk} 1.3.0 no lo permiten, porque cada escritura abre y confirma su propia transacción. Por eso el orquestador guardará las Tasks en una tabla propia, con su propia implementación de \texttt{TaskStore} (D-126). Está pendiente de implementar.
