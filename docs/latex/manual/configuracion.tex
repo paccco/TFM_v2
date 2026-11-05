@@ -1,0 +1,56 @@
+\chapter{Configuración}
+
+\section{Arrancar el orquestador}
+
+El orquestador lee su configuración de variables de entorno:
+
+\begin{tabular}{lp{6.5cm}}
+  \textbf{Variable} & \textbf{Contenido} \\
+  \texttt{DATABASE\_URL} & Conexión a PostgreSQL. Obligatoria. \\
+  \texttt{ORQUESTADOR\_URL} & URL pública que anuncia la AgentCard. Obligatoria. \\
+  \texttt{ORQUESTADOR\_TOKENS} & Tokens de los compradores, como \texttt{partyId=token}, separados por comas. \\
+  \texttt{ORQUESTADOR\_ORIGENES\_AGENTES} & Orígenes de los que se aceptan AgentCards, separados por comas. Cada uno lleva esquema y host, y el puerto si no es el de por defecto. \\
+  \texttt{ORQUESTADOR\_HOST} & Dirección de escucha. Por defecto, \texttt{127.0.0.1}. \\
+  \texttt{ORQUESTADOR\_PUERTO} & Puerto de escucha. Por defecto, 8000. \\
+\end{tabular}
+
+Un origen se escribe, por ejemplo, como \texttt{https://agentes.ejemplo:8443}. Con las variables definidas:
+
+\begin{verbatim}
+uv run python -m orquestador
+\end{verbatim}
+
+Si faltan los tokens, nadie puede autenticarse. Si faltan los orígenes, se rechaza cualquier sesión. Un origen o un token mal escrito impide arrancar.
+
+\section{Seguridad del despliegue}
+
+Sin TLS, el token viaja en claro. Por eso el orquestador solo escucha en el propio equipo por defecto. Para exponerlo fuera, pon delante un proxy con TLS.
+
+Los tokens no caducan. Para cambiar uno, actualiza la variable y reinicia el orquestador. Trátalos como contraseñas: guárdalos en \texttt{.env} o en un gestor de secretos, nunca en el repositorio.
+
+\section{Configuración de una sesión}
+
+El coordinador envía una configuración por partida en \texttt{OPEN\_ROUND}:
+
+\begin{tabular}{lp{5cm}l}
+  \textbf{Campo} & \textbf{Restricción} & \textbf{Por defecto} \\
+  \texttt{fixedTerms} & \texttt{productId}, \texttt{unit} y \texttt{currency} (ISO 4217) & Obligatorio \\
+  \texttt{parties} & Dos partes: un \texttt{BUYER} y un \texttt{SELLER} & Obligatorio \\
+  \texttt{openingPartyId} & Una de las dos partes & Obligatorio \\
+  \texttt{validationMode} & \texttt{STRICT} & Obligatorio \\
+  \texttt{maxRetries} & 0 & 2 (se rechaza) \\
+  \texttt{turnTimeoutSeconds} & Mayor que 0 & 60 \\
+  \texttt{pollIntervalSeconds} & Mayor que 0 y menor que \texttt{turnTimeoutSeconds} & 1 \\
+  \texttt{maxTurns} & Al menos 2 & 10 \\
+  \texttt{holdTimeoutSeconds} & Mayor que 0 & 1800 \\
+\end{tabular}
+
+\section{Límites de esta versión}
+
+\begin{itemize}
+  \item \texttt{validationMode = TOLERANT} se rechaza con \texttt{INVALID\_CONFIG}.
+  \item Un \texttt{maxRetries} distinto de 0 se rechaza con \texttt{INVALID\_CONFIG}. Como su valor por defecto es 2, hay que enviar 0 de forma explícita.
+  \item Un \texttt{OPEN\_ROUND} con \texttt{requestId} se rechaza con \texttt{UNKNOWN\_REQUEST}: solo se admite la primera ronda.
+  \item Reenviar una petición con el mismo \texttt{messageId} devuelve un error A2A, en lugar de la Task original. No se escribe nada.
+  \item Las sesiones se quedan en \texttt{NEGOTIATING} tras comprobar las AgentCards: la negociación aún no está implementada.
+\end{itemize}

@@ -565,7 +565,7 @@ Decisiones tomadas al diseñar cómo pide el coordinador del comprador (D-80) qu
   Cada petición, aceptada o rechazada, se añade a un registro nuevo de solo añadir con su tipo, `requestId`, ronda, resultado y códigos de rechazo, en la misma transacción que sus efectos (D-63, D-69). Amplía D-50 con códigos nuevos, cuyos nombres se fijan en `protocolo.md` (propuesta: `INVALID_CONFIG`, `UNKNOWN_REQUEST`, `NOT_HELD`, `NOT_AUTHORIZED`).
 - **Motivo:** la autocorrección es para los actos que genera un SLM en la negociación (D-02); el coordinador construye sus peticiones con código, como el orquestador las suyas (D-71). Rechazar entero mantiene la atomicidad de D-77: si una reserva caduca mientras llega la confirmación, el coordinador recibe el motivo y recalcula con el estado real.
 - **Descartado:** autocorregir las peticiones del comprador; aplicar las partes válidas de una petición.
-- **Ampliada por D-92, D-100 y D-103. Precisada por D-93, D-94, D-98, D-101, D-102, D-111, D-112, D-113 y D-118.**
+- **Ampliada por D-92, D-100 y D-103. Precisada por D-93, D-94, D-98, D-101, D-102, D-111, D-112, D-113, D-118 y D-128.**
 
 ## Configuración de la sesión
 
@@ -583,7 +583,7 @@ Decisiones tomadas al cerrar `configuracion-sesion.md`, que pasa a ser el cuerpo
   En todas las sesiones de un `OPEN_ROUND`, el `partyId` del `BUYER` es el mismo y coincide con el `sender` de la petición; las rondas siguientes de la misma petición mantienen ese comprador (D-89). `sessionId`, `requestId`, número de ronda y duración del arrendamiento no forman parte de la configuración. Amplía D-40; precisa D-11, D-30, D-36 y D-41.
 - **Motivo:** `fixedTerms` se copia sin transformar en `TURN_REQUEST`. «Party» es neutro y resuelve en los nombres de campo el vocabulario de D-75. `agentCardUrl` indica al orquestador dónde comprobar la AgentCard (D-25) y llamar a cada agente, incluido el negociador del comprador.
 - **Descartado:** un registro de partes en el orquestador con alta previa de cada vendedor, porque añade una pieza y un proceso de alta; se puede añadir más adelante.
-- **Precisada por D-99 y D-102.**
+- **Precisada por D-99, D-102 y D-129.**
 
 ### D-91 · Valores por defecto globales y valores efectivos guardados
 - **Fecha:** 2026-11
@@ -655,13 +655,14 @@ Decisiones tomadas al diseñar CU-04.
 - **Decisión:** el orquestador detecta un `OPEN_ROUND` duplicado por el par `sender` + `messageId`, comprobado antes de validar la petición. Ante un duplicado devuelve la Task de la petición original en su estado actual, sin crear rondas ni sesiones y sin añadir entradas a ningún registro. El par es único en el registro de peticiones: si dos copias llegan a la vez, la segunda escritura falla y se devuelve la Task de la primera. Si el sobre no permite leer `sender`, no se comprueba el duplicado y la petición se rechaza. Precisa D-88 y D-89.
 - **Motivo:** si el coordinador cae justo después de enviar y reenvía la petición, sin esta regla se abriría una segunda ronda con sesiones duplicadas, que podrían acabar en compras dobles. A2A prevé que el servidor detecte duplicados por `messageId`, como se espera de los agentes (D-66).
 - **Descartado:** no detectar duplicados; detectarlos por el contenido de la petición.
-- **Ampliada por D-109.**
+- **Ampliada por D-109. Precisada por D-128.**
 
 ### D-99 · Comprobación de AgentCards
 - **Fecha:** 2026-11
 - **Decisión:** en `CREATED`, el orquestador obtiene las AgentCards de las dos partes de la sesión en paralelo, con un intento por parte y el `turnTimeoutSeconds` efectivo de la sesión como tiempo máximo. Una parte falla si su AgentCard no se puede obtener (error de transporte, tiempo superado o respuesta no interpretable como AgentCard) o si no declara `urn:tfm:negociacion:v1` con `required = true` (D-25). Si fallan las dos, `failedPartyId` es la primera según el orden de `parties`. Cada sesión se comprueba por separado, aunque una parte aparezca en varias sesiones de la ronda. Precisa D-25, D-90 y D-94.
 - **Motivo:** reutiliza un parámetro que ya existe y es determinista. Convertir `failedPartyId` en una lista cambiaría D-92.
 - **Descartado:** reintentar la obtención; un tiempo máximo propio; guardar en caché las AgentCards entre sesiones.
+- **Precisada por D-129.**
 
 ### D-100 · Ronda nueva con trabajo pendiente: `ROUND_CONFLICT`
 - **Fecha:** 2026-11
@@ -691,7 +692,7 @@ Decisiones tomadas al diseñar CU-04.
   Precisa D-89 y D-90; obliga a revisar «Restricciones en `OPEN_ROUND`» de `configuracion-sesion.md` y la tabla «Peticiones no válidas» de `protocolo.md`.
 - **Motivo:** tal como estaban los documentos, `NOT_AUTHORIZED` no tenía ningún caso propio en `OPEN_ROUND` y los otros dos códigos se solapaban con él.
 - **Descartado:** tratar la coincidencia del `BUYER` con el `sender` como `INVALID_CONFIG`.
-- **Precisada por D-113.**
+- **Precisada por D-113 y D-128.**
 
 ### D-103 · Message sin forma de petición: `INVALID_MESSAGE`
 - **Fecha:** 2026-11
@@ -878,3 +879,31 @@ Decisiones tomadas al diseñar CU-07.
 - **Decisión:** el orquestador guarda las Tasks de las peticiones del comprador en una tabla propia, dentro de su transacción, con una implementación propia de la interfaz `TaskStore` de `a2a-sdk`. Queda por comprobar cómo llama el manejador del SDK a `save` al implementar D-87. Precisa D-97.
 - **Motivo:** D-97 exige la misma transacción que las sesiones, y `save` abre y confirma su propia sesión en los dos almacenes de `a2a-sdk` 1.3.0.
 - **Descartado:** `DatabaseTaskStore` y `VersionedDatabaseTaskStore`, por ese motivo.
+- **Precisada por D-127.**
+
+## Servidor A2A del orquestador
+
+Decisiones tomadas al implementar D-87 en `feature/abrir-ronda`.
+
+### D-127 · `RequestHandler` propio para las peticiones del comprador
+- **Fecha:** 2026-11
+- **Decisión:** el orquestador implementa la interfaz `RequestHandler` de `a2a-sdk` y usa sus rutas JSON-RPC y de AgentCard. `on_message_send` valida y escribe la Task en su transacción; `on_get_task` lee la tabla; los demás métodos responden `UnsupportedOperationError`. No usa `TaskStore` ni `AgentExecutor`. Precisa D-126 y cierra su comprobación pendiente.
+- **Motivo:** en `a2a-sdk` 1.3.0, `DefaultRequestHandler` llama a `save` desde otra tarea de asyncio y después de que el ejecutor emita el evento, sin pasarle ninguna transacción, y una Task completada por otra instancia no pasa por él. Así no se cumple D-97.
+- **Descartado:** un `TaskStore` que reciba la conexión en `context.state`, porque depende de detalles internos del SDK y no resuelve la Task completada por otra instancia.
+
+### D-128 · Autenticación bearer del coordinador
+- **Fecha:** 2026-11
+- **Decisión:** todo acceso al orquestador salvo su AgentCard exige `Authorization: Bearer <token>`. Cada token corresponde a un `partyId` y se configura en el despliegue. La AgentCard lo declara como esquema HTTP bearer. Sin credencial válida, el orquestador responde 401 con `WWW-Authenticate`, sin Task ni entrada en el registro de peticiones, como excepción a D-89 y D-103. Además:
+  - Un `sender` distinto de la identidad autenticada se rechaza con `NOT_AUTHORIZED` en `envelope.sender` en `OPEN_ROUND`, y con `UNKNOWN_REQUEST` en `body.requestId` en `RESOLVE_HOLDS` (D-113). Hay un solo fallo por ruta.
+  - El duplicado (D-98, D-109) solo se busca si `sender` es la identidad autenticada. La entrada del registro de peticiones guarda la identidad, y el par `sender` + `messageId` solo es único entre las entradas cuyo `sender` es su identidad.
+  - Cada Task guarda su identidad. `GetTask` de otra identidad responde `TaskNotFoundError`, sin distinguirla de una Task inexistente.
+
+  Precisa D-89, D-98 y D-102. Cierra la pregunta de `maquina-estados.md`, sección 6.
+- **Motivo:** A2A 1.0 exige autenticar cada petición, y la identidad no viaja en el mensaje: comparar el `sender` solo comparaba un valor declarado. Sin la regla de unicidad, un comprador podría bloquear los `messageId` de otro enviándolos con su `sender`.
+- **Descartado:** OAuth2 u OpenID Connect y TLS mutuo, por la infraestructura que añaden. Esta decisión no cubre TLS, caducidad de tokens ni rotación sin reinicio.
+
+### D-129 · Orígenes permitidos para `agentCardUrl`
+- **Fecha:** 2026-11
+- **Decisión:** el origen (esquema, host y puerto) de cada `agentCardUrl` debe estar en una lista fijada en el despliegue. Si no lo está, la ronda se rechaza con `INVALID_CONFIG` en `body.sessions.<i>.config.parties.<j>.agentCardUrl` y no se hace ninguna petición de red. Una redirección no se sigue: cuenta como AgentCard que no se puede obtener (D-99). Precisa D-90 y D-99.
+- **Motivo:** el orquestador hace un GET a una dirección que recibe del cliente. Sin límite, se le podría usar para sondear servicios internos.
+- **Descartado:** dejar la sesión en `NOT_STARTED` para un origen no permitido, porque un error de configuración parecería un fallo del agente; bloquear redes privadas, porque es vulnerable a DNS rebinding y obliga a una excepción en desarrollo local. No es el registro de partes que descarta D-90: no da de alta partes, solo orígenes.

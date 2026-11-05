@@ -48,12 +48,13 @@ Comprador con coordinador mínimo y vendedor, con estrategias fijas y sin LLM. D
 - Una sesión con `maxRetries` efectivo distinto de 0 se rechaza con `INVALID_CONFIG` en `body.sessions.<i>.config.maxRetries`, también si falta el campo, porque su valor por defecto es 2 (D-91). `feature/reintentos-aborto` levanta este límite.
 - Un acto no válido, un fallo de Task o un tiempo agotado llevan la sesión a `CLOSING` con `outcome = ABORTED`, `abortReason = RETRIES_EXHAUSTED` y `lastFailure`. Es el estado que ya define la máquina: con `maxRetries = 0`, el primer fallo agota los reintentos (D-07, D-53, `maquina-estados.md` §5). No hay estados ni resultados provisionales.
 - Una petición no válida no termina ninguna sesión: la Task queda en `TASK_STATE_REJECTED` con `rejections` y las sesiones no cambian (D-89, D-97, D-110). `feature/rechazos-peticiones` completa los casos restantes.
+- Un `OPEN_ROUND` con `requestId` se rechaza con `UNKNOWN_REQUEST` en `body.requestId`, exista o no la petición, y no escribe más que el rechazo. `feature/varias-sesiones` levanta este límite.
 
 ### `feature/abrir-ronda`
-- **CU y AC:** CU-04. AC-04-01, AC-04-02, AC-04-03, AC-04-05, AC-04-06, AC-04-07, AC-04-09, AC-04-11, AC-04-12, AC-04-22, AC-04-25.
+- **CU y AC:** CU-04. AC-04-01, AC-04-02, AC-04-03, AC-04-05, AC-04-06, AC-04-07, AC-04-09, AC-04-11, AC-04-12, AC-04-13, AC-04-17, AC-04-22, AC-04-23, AC-04-24, AC-04-25, AC-04-27, AC-04-28 a AC-04-31.
 - **Depende de:** `feature/setup`.
-- **Pruebas:** PostgreSQL real y un servidor A2A de prueba para las AgentCards. La atomicidad se comprueba forzando un fallo dentro de la transacción. AC-04-22, con una segunda instancia que solo comparte la base de datos. Rechazo de `TOLERANT` y de `maxRetries` distinto de 0.
-- **LaTeX:** `tecnica/` Arquitectura y Protocolo (peticiones del comprador); `manual/` Configuración (límites de v0.1.0).
+- **Pruebas:** PostgreSQL real y un servidor A2A de prueba para las AgentCards. La atomicidad se comprueba forzando un fallo dentro de la transacción. AC-04-22, con una segunda instancia que solo comparte la base de datos. Rechazo de `TOLERANT` y de `maxRetries` distinto de 0. Autenticación bearer y orígenes permitidos (D-128, D-129).
+- **LaTeX:** `tecnica/` Arquitectura y Protocolo (peticiones del comprador y autenticación); `manual/` Configuración (tokens, orígenes, TLS y límites de v0.1.0).
 
 ### `feature/turnos`
 - **CU y AC:** CU-01 y CU-03, camino válido hasta `HELD`. AC-01-01, AC-01-02 (parte), AC-01-03, AC-01-15 (parte: `maxRetries = 0`), AC-03-01, AC-03-02, AC-03-03 (parte), AC-03-04, AC-03-06, AC-03-16.
@@ -96,7 +97,7 @@ Cada rama de este hito añade su escenario extremo a extremo con agentes simulad
 - **LaTeX:** `tecnica/` Máquina de estados; `manual/` Leer el resultado.
 
 ### `feature/rechazos-peticiones`
-- **CU y AC:** CU-04 y CU-06. AC-04-13, AC-04-14, AC-04-17 a AC-04-19, AC-04-23, AC-04-24, AC-04-27; AC-06-10 a AC-06-18, AC-06-22, AC-06-23.
+- **CU y AC:** CU-04 y CU-06. AC-04-14, AC-04-18, AC-04-19; AC-06-10 a AC-06-18, AC-06-22, AC-06-23.
 - **Depende de:** H1.
 - **Pruebas:** una petición por código de rechazo; duplicados en serie y a la vez, con dos conexiones; plazo vencido con un `heldUntil` sembrado.
 - **LaTeX:** `tecnica/` Protocolo (peticiones no válidas); `manual/` Errores visibles.
@@ -129,6 +130,7 @@ Cada rama de este hito añade su escenario extremo a extremo con agentes simulad
 
 ### `feature/varias-sesiones` (importante)
 - **CU y AC:** CU-04 y CU-06. AC-04-04, AC-04-08, AC-04-10, AC-04-15, AC-04-16, AC-04-20, AC-04-26, AC-06-05, AC-06-24.
+- **Levanta:** el límite de `requestId` de v0.1.0.
 - **Depende de:** `feature/rechazos-peticiones`, `feature/caducidad-plazo`.
 - **Pruebas:** petición con dos partidas en paralelo; segunda ronda con una partida mantenida (D-79); competencia entre instancias y entre rondas; extremo a extremo con el coordinador mínimo.
 - **LaTeX:** `tecnica/` Flujo de una sesión (peticiones compuestas); `manual/` Lanzar una negociación.
@@ -137,7 +139,7 @@ Cada rama de este hito añade su escenario extremo a extremo con agentes simulad
 
 Aún no tiene CU ni AC, así que sus ramas no se pueden proponer (`proceso.md` §5). Falta diseñar, y lo decide el desarrollador:
 - los agentes vendedor y comprador, con su negociador y su coordinador (D-06, D-76 a D-81);
-- las preguntas de `maquina-estados.md` §6 que se dejan para ese momento: almacén de Tasks de los agentes, fallo de `AGREEMENT_HELD` a un vendedor y autenticación del coordinador;
+- las preguntas de `maquina-estados.md` §6 que se dejan para ese momento: almacén de Tasks de los agentes y fallo de `AGREEMENT_HELD` a un vendedor;
 - el SLM y su despliegue.
 
 - **Ramas previstas:** una `feature/docs-` para las tarjetas y, después, las `feature/` que salgan de ellas.

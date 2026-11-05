@@ -1,6 +1,6 @@
 \chapter{Arquitectura}
 
-Este capítulo recoge por ahora el stack. Los componentes del orquestador están pendientes de implementar.
+Este capítulo recoge el stack y los componentes implementados del orquestador. Por ahora cubren la apertura de una ronda (CU-04); los turnos están pendientes de implementar.
 
 \section{Stack}
 
@@ -11,6 +11,7 @@ Este capítulo recoge por ahora el stack. Los componentes del orquestador están
   Protocolo & A2A 1.0 con \texttt{a2a-sdk} 1.3.0 (D-17) \\
   Almacén del estado & PostgreSQL 18.6 (D-69, D-125) \\
   Controlador de PostgreSQL & \texttt{psycopg} 3.3.8 (D-125) \\
+  Servidor HTTP & Starlette y \texttt{uvicorn} (D-127) \\
   Tests & \texttt{pytest} (D-14) \\
   Lint y formato & \texttt{ruff} (D-15) \\
 \end{tabular}
@@ -27,6 +28,48 @@ Los tests de \texttt{tests/test\_setup.py} usan PostgreSQL real, sin simulacione
   \item El reloj del servidor se puede leer y da la hora con zona horaria (D-69).
 \end{itemize}
 
+\section{Componentes}
+
+\begin{tabular}{p{4cm}p{9.5cm}}
+  \textbf{Módulo} & \textbf{Qué hace} \\
+  \texttt{peticiones.py} & Valida la forma, el sobre, el cuerpo y la configuración de una petición. Es una función pura: no usa la base de datos ni la red. \\
+  \texttt{almacen.py} y \texttt{esquema.sql} & Conexión a PostgreSQL, tablas y lectura de las Tasks. \\
+  \texttt{rondas.py} & Escribe la aceptación o el rechazo, comprueba las AgentCards y saca cada sesión de \texttt{CREATED}. \\
+  \texttt{servidor.py} & Manejador A2A, autenticación y AgentCard del orquestador. \\
+\end{tabular}
+
+\section{Apertura de una ronda}
+
+Un \texttt{OPEN\_ROUND} (CU-04) recorre estos pasos:
+
+\begin{enumerate}
+  \item La autenticación identifica al comprador por su token (D-128). Sin un token válido, la petición termina aquí con un 401.
+  \item El manejador valida la petición y recoge todos sus fallos (D-101).
+  \item Si hay fallos, una transacción escribe la Task en \texttt{TASK\_STATE\_REJECTED} y la entrada del registro de peticiones (D-89, D-97).
+  \item Si no los hay, una transacción escribe la petición, las sesiones en \texttt{CREATED}, la Task en \texttt{TASK\_STATE\_WORKING} y la entrada del registro (AC-04-03).
+  \item Cada sesión se comprueba por separado: se renueva el arrendamiento y se obtienen las dos AgentCards en paralelo (D-99). La sesión pasa a \texttt{NEGOTIATING} o a \texttt{NOT\_STARTED}.
+  \item La transacción que saca de \texttt{CREATED} la última sesión completa la Task con su Artifact (D-94).
+\end{enumerate}
+
+Cada salida de \texttt{CREATED} escribe también el registro de petición, de forma condicional por versión (D-63). Dos salidas a la vez chocan en esa fila y la que pierde repite la transacción, ya viendo la otra sesión fuera de \texttt{CREATED}. Por eso la Task se completa una sola vez.
+
+Pendiente de implementar: ninguna pieza procesa aún una sesión en \texttt{READY} (\texttt{feature/turnos}), ni recoge las sesiones de una instancia caída (\texttt{feature/recuperacion}).
+
 \section{Tasks de las peticiones del comprador}
 
-D-97 exige escribir cada Task en la misma transacción que las sesiones. Los almacenes de \texttt{a2a-sdk} 1.3.0 no lo permiten, porque cada escritura abre y confirma su propia transacción. Por eso el orquestador guardará las Tasks en una tabla propia, con su propia implementación de \texttt{TaskStore} (D-126). Está pendiente de implementar.
+D-97 exige escribir cada Task en la misma transacción que las sesiones. Los almacenes de \texttt{a2a-sdk} 1.3.0 no lo permiten, porque cada escritura abre y confirma su propia transacción (D-126).
+
+Tampoco sirve un \texttt{TaskStore} propio con \texttt{DefaultRequestHandler}. Medido con un almacén de prueba, el manejador llama a \texttt{save} desde otra tarea de asyncio, después de que el ejecutor emita el evento y sin pasarle ninguna transacción. Además, una Task completada por otra instancia no pasa por él.
+
+Por eso el orquestador implementa directamente la interfaz \texttt{RequestHandler} y reutiliza las rutas JSON-RPC y de AgentCard del SDK (D-127). \texttt{SendMessage} escribe la Task en su transacción y \texttt{GetTask} la lee de la tabla \texttt{tareas}. Así, cualquier instancia responde con la Task guardada (AC-04-22). Los demás métodos responden \texttt{UnsupportedOperationError}.
+
+\section{Seguridad}
+
+\begin{itemize}
+  \item \textbf{Autenticación (D-128).} Todo acceso salvo la AgentCard exige un token bearer, y cada token corresponde a un \texttt{partyId}. Los tokens se comparan en tiempo constante.
+  \item \textbf{Identidad y remitente.} El \texttt{sender} del sobre es un valor declarado, así que se compara con la identidad del token. Un \texttt{sender} suplantado no cuenta para la unicidad de \texttt{sender} + \texttt{messageId}, de modo que nadie puede bloquear los \texttt{messageId} de otro comprador.
+  \item \textbf{Tasks ajenas.} \texttt{GetTask} de una Task de otra identidad responde igual que con una inexistente.
+  \item \textbf{Orígenes permitidos (D-129).} El orquestador solo pide AgentCards a los orígenes de una lista del despliegue, y no sigue redirecciones. El origen se calcula con el mismo intérprete de URL que hace la petición, para que los dos no puedan discrepar sobre el host.
+\end{itemize}
+
+Quedan fuera por ahora: TLS, que hay que poner delante del orquestador si se expone fuera del equipo; la caducidad y la rotación de tokens sin reinicio, y la autenticación del orquestador ante los agentes.

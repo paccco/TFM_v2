@@ -4,9 +4,9 @@
 |---|---|
 | Actor principal | Coordinador del comprador (cliente A2A del orquestador, D-80, D-87) |
 | Objetivo | Validar la petición, crear las sesiones de la ronda, comprobar sus AgentCards y devolver al coordinador qué sesiones han empezado |
-| Precondiciones | El orquestador publica su AgentCard con `urn:tfm:negociacion:v1` y `required = true` (D-87). A partir de la ronda 2, existe el registro de la petición (D-83). El modo de validación no interviene: las peticiones no se autocorrigen (D-89) |
+| Precondiciones | El orquestador publica su AgentCard con `urn:tfm:negociacion:v1` y `required = true` (D-87) y con el esquema HTTP bearer (D-128). El coordinador tiene un token asociado a su `partyId`. A partir de la ronda 2, existe el registro de la petición (D-83). El modo de validación no interviene: las peticiones no se autocorrigen (D-89) |
 | Disparador | `SendMessage` del coordinador al orquestador con un `OPEN_ROUND` |
-| Decisiones y reglas | D-04, D-18, D-19, D-25, D-29, D-30, D-50, D-63, D-65–D-67, D-69, D-79, D-83, D-87–D-94, D-97–D-106. AC-04-01 a AC-04-27 |
+| Decisiones y reglas | D-04, D-18, D-19, D-25, D-29, D-30, D-50, D-63, D-65–D-67, D-69, D-79, D-83, D-87–D-94, D-97–D-106, D-127–D-129. AC-04-01 a AC-04-31 |
 
 ## Flujo principal
 1. El orquestador recibe el Message con la cabecera `A2A-Extensions`, la URI en `extensions`, el sobre en `metadata["urn:tfm:negociacion:v1"]` y una Part `data` de `mediaType` de petición (D-19, D-92, D-103). Lee `sender` del sobre y el `messageId`.
@@ -19,7 +19,9 @@
 5. Valida las configuraciones:
    - resuelve los valores efectivos con los valores por defecto y comprueba sus restricciones (`INVALID_CONFIG`, D-90, D-91);
    - comprueba que los `itemId` son distintos y que el `partyId` del `BUYER` es el mismo en todas las sesiones (`INVALID_CONFIG`);
-   - si el `BUYER` es el mismo en todas, comprueba que coincide con el `sender` (`NOT_AUTHORIZED` en `envelope.sender`, D-102).
+   - si el `BUYER` es el mismo en todas, comprueba que coincide con el `sender` (`NOT_AUTHORIZED` en `envelope.sender`, D-102);
+   - comprueba que el `sender` es la identidad autenticada (`NOT_AUTHORIZED` en `envelope.sender`, D-128), con un solo fallo por ruta;
+   - comprueba que el origen de cada `agentCardUrl` está en la lista de orígenes permitidos (`INVALID_CONFIG`, D-129).
 6. Sin fallos, en una sola transacción:
    - Ronda 1: crea el registro de petición con un `requestId` nuevo (UUID, creación condicional) y el comprador. Ronda ≥ 2: añade la ronda siguiente al registro de petición con escritura condicional por versión.
    - Anota en la ronda las sesiones creadas con su `itemId` y las sesiones de la petición que siguen en `HELD` (partidas mantenidas, D-79, D-83).
@@ -32,12 +34,13 @@
 10. La transacción que saca de `CREATED` la última sesión de la ronda completa la Task con el Artifact de resultado: `requestId`, `round` y `sessions` con `{itemId, sessionId, started, failedPartyId}` (D-92, D-94, D-97). El Artifact lleva la URI en `extensions` y un sobre con `type = OPEN_ROUND`, `sender = ORCHESTRATOR` y sin `sessionId` ni `turn` (D-104). Cada transacción de salida de `CREATED` escribe también el registro de petición de forma condicional por versión, para que dos instancias no crean a la vez que la otra sesión sigue en `CREATED`.
 
 ## Flujos alternativos
+- **0a.** La petición HTTP no lleva una credencial bearer válida → se responde 401 con `WWW-Authenticate`. No se crea Task ni entrada en el registro de peticiones (D-128).
 - **1a.** El Message no tiene forma de petición → no se valida el sobre ni el cuerpo; se rechaza como en 3a con un solo fallo, `INVALID_MESSAGE` en `message` (D-103). La entrada del registro lleva el `type` y el `sender` solo si se pudieron leer. Si no se pudo leer un `type` de petición válido, el mensaje de estado del rechazo va sin sobre, solo con `rejections` y la URI en `extensions` (D-106). Los casos son:
   - falta la cabecera o la URI en `extensions`;
   - falta el sobre;
   - no hay exactamente una Part `data` con el `mediaType` de petición.
 - **2a.** Ya existe una entrada con el mismo `sender` y `messageId` → se devuelve la Task de esa petición en su estado actual. No se escribe nada (D-98).
-- **2b.** El sobre no permite leer `sender` → no se comprueba el duplicado; la validación del paso 3 lo rechaza.
+- **2b.** El sobre no permite leer `sender`, o `sender` no es la identidad autenticada (D-128) → no se comprueba el duplicado; la validación lo rechaza.
 - **3a / 4a / 5a.** Hay al menos un fallo → en una transacción se crea la Task en `TASK_STATE_REJECTED`, cuyo mensaje de estado lleva `rejections` con todos los fallos ordenados por ruta, la URI en `extensions` y un sobre con `type = OPEN_ROUND`, `sender = ORCHESTRATOR` y sin `sessionId` ni `turn` (D-104). Se añade la entrada rechazada, con sus códigos, al registro de peticiones. No se crea ni modifica ningún registro de petición ni sesión (D-89, D-97, D-101). Se responde con esa Task.
 - **6a.** La escritura condicional del registro de petición falla porque otro `OPEN_ROUND` de la misma petición se adelantó → se descarta la transacción, se relee y se vuelve al paso 4. Puede acabar en rechazo con `ROUND_CONFLICT` (D-101).
 - **6b.** La entrada del registro de peticiones choca con otra de igual `sender` y `messageId`, porque un duplicado llegó a la vez → se descarta la transacción y se continúa como en 2a (D-98).
@@ -87,6 +90,10 @@
 - [ ] AC-04-25 · El Artifact de resultado y el mensaje de estado de un rechazo llevan la URI en `extensions` y un sobre con `type = OPEN_ROUND`, `sender = ORCHESTRATOR` y sin `sessionId` ni `turn`.
 - [ ] AC-04-26 · Un `OPEN_ROUND` con un `itemId` igual al de una sesión de la petición en `CLOSING` o `CLOSED` con `AGREEMENT` rechaza con `ROUND_CONFLICT` en `body.sessions.<i>.itemId`.
 - [ ] AC-04-27 · Un rechazo por `INVALID_MESSAGE` en el que no se pudo leer un `type` de petición válido lleva el mensaje de estado sin sobre, solo con `rejections` y la URI en `extensions`. Si el `type` se pudo leer, lleva el sobre de AC-04-25.
+- [ ] AC-04-28 · Una petición sin credencial bearer válida recibe 401 con `WWW-Authenticate` y no escribe nada. La AgentCard se obtiene sin credencial y declara el esquema HTTP bearer (D-128).
+- [ ] AC-04-29 · Un `sender` distinto de la identidad autenticada, aunque coincida con el `BUYER`, rechaza con `NOT_AUTHORIZED` en `envelope.sender`, con un solo fallo en esa ruta, y su entrada no cuenta para la unicidad de `sender` + `messageId` (D-128).
+- [ ] AC-04-30 · `GetTask` de una Task de otra identidad responde `TaskNotFoundError`, igual que con una Task inexistente (D-128).
+- [ ] AC-04-31 · Un `agentCardUrl` con un origen fuera de la lista rechaza la ronda con `INVALID_CONFIG` en `body.sessions.<i>.config.parties.<j>.agentCardUrl`, sin ninguna petición de red. Una AgentCard que responde con una redirección deja la sesión en `NOT_STARTED` y la redirección no se sigue (D-129).
 
 ## Preguntas abiertas
 <!-- Lo que gemini-analista no puede deducir de docs/contexto/ va aquí, nunca se inventa -->

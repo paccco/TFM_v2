@@ -1,6 +1,6 @@
 # Máquina de estados
 
-Decisiones que la condicionan: D-04, D-05, D-07, D-08, D-20, D-23, D-25, D-46, D-49, D-51 a D-57, D-58 a D-71, D-77 y D-82 a D-126. D-58 sustituye a D-24.
+Decisiones que la condicionan: D-04, D-05, D-07, D-08, D-20, D-23, D-25, D-46, D-49, D-51 a D-57, D-58 a D-71, D-77 y D-82 a D-129. D-58 sustituye a D-24.
 
 Este documento define los estados por los que pasa una sesión, los subestados de cada turno, qué se guarda en el estado externalizado en cada transición, cómo se agrupan las sesiones en peticiones, cómo se cierra la sesión y qué restricciones impone todo ello a la configuración. El estado externalizado se guarda en PostgreSQL (D-69).
 
@@ -142,7 +142,7 @@ Uno por petición (D-83); lleva versión, como el registro de sesión (D-63). Se
 No guarda el presupuesto ni la corrección propuesta al usuario (D-83).
 
 ### Tasks de las peticiones del comprador (D-97)
-El orquestador, como servidor A2A del coordinador, guarda en la misma base de datos las Tasks de las peticiones, con su estado, su mensaje de estado y su Artifact. `GetTask` del coordinador se responde con la Task guardada. Para `OPEN_ROUND`:
+El orquestador, como servidor A2A del coordinador, guarda en la misma base de datos las Tasks de las peticiones, con su estado, su mensaje de estado, su Artifact y la identidad autenticada que la creó (D-128). `GetTask` del coordinador se responde con la Task guardada, solo a esa identidad. Para `OPEN_ROUND`:
 
 | Momento | Estado de la Task | Se escribe en la misma transacción que |
 |---|---|---|
@@ -168,7 +168,7 @@ Las entradas se escriben una vez y nunca se modifican.
 | Fallos | Fallo de un intento | `turn`, `attempt`, `taskId` si lo hay, `code`, `field`, instante |
 | Coerciones | Corrección aplicada | `turn`, `attempt`, `taskId`, `code`, `field`, valor original, valor corregido, decisión aplicada (el `R-xx` de la regla, D-123), instante |
 | Envíos de control | Envío de `AGREEMENT_HELD` o `SESSION_CLOSE` (D-70, D-85) | Tipo de mensaje, parte, `turn`, instante, resultado (enviado o fallido) y, según el caso, `taskId` y estado de la Task, indicación de Message o `code` del fallo (`AGENT_UNREACHABLE`, `TURN_TIMEOUT`, `AGENT_ERROR`) |
-| Peticiones del comprador | `OPEN_ROUND` o `RESOLVE_HOLDS` recibida, salvo duplicados (D-89, D-98, D-109) | Tipo y `sender` si se pudieron leer (D-103), `requestId` (salvo rechazo en ronda 1 o `requestId` no válido), ronda, `messageId`, `taskId` de la Task de la petición, resultado (aceptada o rechazada), códigos de rechazo, instante. En `RESOLVE_HOLDS`, la ronda es la última abierta de la petición, y falta si el `requestId` no es válido (D-118). El par `sender` + `messageId` es único |
+| Peticiones del comprador | `OPEN_ROUND` o `RESOLVE_HOLDS` recibida, salvo duplicados (D-89, D-98, D-109) | Tipo y `sender` si se pudieron leer (D-103), identidad autenticada (D-128), `requestId` (salvo rechazo en ronda 1 o `requestId` no válido), ronda, `messageId`, `taskId` de la Task de la petición, resultado (aceptada o rechazada), códigos de rechazo, instante. En `RESOLVE_HOLDS`, la ronda es la última abierta de la petición, y falta si el `requestId` no es válido (D-118). El par `sender` + `messageId` es único entre las entradas cuyo `sender` es su identidad (D-128) |
 
 El registro de actos aceptados da el historial completo de la negociación; el registro de sesión solo guarda la oferta vigente. Los instantes permiten medir la latencia de los agentes. Un envío de control repetido tras una caída deja dos entradas para la misma parte. El registro de peticiones, junto con el registro de petición, explica por qué se abrió cada ronda y por qué cada sesión salió de `HELD`. Un `OPEN_ROUND` o `RESOLVE_HOLDS` duplicado no deja entrada: devuelve la Task de la petición original (D-98, D-109). La caducidad del plazo no deja entrada en ningún registro de solo añadir: queda en el resultado de la sesión y en los envíos de `SESSION_CLOSE` (D-121).
 
@@ -200,7 +200,7 @@ Cada fila se escribe de forma atómica: los registros afectados, las Tasks de la
 - **Búsqueda de sesiones con trabajo pendiente (D-119, D-120).** Una sola búsqueda periódica en la base de datos, cada 5 s (constante fija en el código), encuentra las sesiones con trabajo pendiente y arrendamiento libre o caducado. Hay trabajo pendiente en `CREATED`, `NEGOTIATING` y `CLOSING`, en `HELD` con envíos de `AGREEMENT_HELD` pendientes y en `HELD` con `heldUntil` vencido según el reloj de la base de datos. La tabla del final de esta sección dice qué hace la instancia con cada una. Cubre la recuperación tras una caída, el cierre de las sesiones que `RESOLVE_HOLDS` deja sin arrendamiento (D-115) y la caducidad del plazo (D-86).
 - **Versión.** Toda escritura exige que la versión no haya cambiado desde la lectura. Si cambió, la escritura se rechaza y la instancia descarta su trabajo.
 - **Reloj único.** Caducidades, `heldUntil` e instantes se miden con el reloj del servidor de base de datos (D-69).
-- **Peticiones duplicadas.** El par `sender` + `messageId` es único en el registro de peticiones, para `OPEN_ROUND` y `RESOLVE_HOLDS`. Si dos copias llegan a la vez, la segunda transacción falla y se devuelve la Task de la primera (D-98, D-109).
+- **Peticiones duplicadas.** El par `sender` + `messageId` es único en el registro de peticiones, para `OPEN_ROUND` y `RESOLVE_HOLDS`, entre las entradas cuyo `sender` es su identidad autenticada (D-128). Si dos copias llegan a la vez, la segunda transacción falla y se devuelve la Task de la primera (D-98, D-109).
 - **`OPEN_ROUND` concurrentes de la misma petición.** La escritura condicional por versión del registro de petición decide cuál entra. El otro relee y vuelve a evaluar la petición, incluidos el número de ronda y `ROUND_CONFLICT` (D-101).
 - **`RESOLVE_HOLDS` no necesita el arrendamiento.** La decisión llega de fuera, no de un trabajo en curso de la sesión. Escribe cada sesión de forma condicional por versión; si alguna versión cambió, relee y vuelve a evaluar, y si alguna sesión ya no está en `HELD`, o tiene `heldUntil` vencido según el reloj de la base de datos, rechaza la petición con `NOT_HELD` (D-89, D-111). Libera el arrendamiento de las sesiones resueltas, para que cualquier instancia las tome para el cierre sin esperar a que caduque. Tras confirmar la transacción, la misma instancia intenta tomarlo y lanza el envío de `SESSION_CLOSE`; si no lo consigue, las recoge la búsqueda de sesiones con trabajo pendiente (D-115, D-119). Una instancia que estaba enviando `AGREEMENT_HELD` a una de esas sesiones verá rechazada su escritura y descartará su trabajo; ese envío queda sin entrada en el registro de control, lo que se acepta porque `AGREEMENT_HELD` no altera el estado (D-85).
 - **Envíos de `AGREEMENT_HELD`.** Antes de enviar, al renovar el arrendamiento, se comprueba si `heldUntil` ha vencido; si ha vencido, no se envía nada y la misma instancia aplica la caducidad sin soltar el arrendamiento (D-107). La transacción que marca el último envío pendiente libera el arrendamiento, para que la búsqueda no tenga que esperar a que caduque para procesar la caducidad (D-108).
@@ -259,9 +259,7 @@ Las restricciones se comprueban sobre los valores efectivos (D-91). La estructur
 El arrendamiento dura `turnTimeoutSeconds + pollIntervalSeconds` y no es configurable. El intervalo más largo sin renovarlo es una llamada a `SendMessage` o la obtención de una AgentCard, acotadas por `turnTimeoutSeconds` en los turnos, en cada envío de control y en la comprobación de AgentCards (D-99); el segundo término es el margen. Con los valores por defecto son 61 s. El retraso máximo en retomar una sesión tras una caída es la duración del arrendamiento más el periodo de la búsqueda: 66 s con los valores por defecto (D-120).
 
 ## 6. Preguntas abiertas
-- Comprobar al implementar D-87 cómo llama el manejador de `a2a-sdk` a `save`, para que la implementación propia de `TaskStore` escriba en la misma transacción que las sesiones (D-126).
 - Fuera del orquestador: los agentes de las partes necesitan un almacén persistente de Tasks para que el sondeo sobreviva a sus reinicios y para detectar duplicados por `messageId` (D-66). Se decide al diseñar los agentes.
 - Si falla el envío de `AGREEMENT_HELD` a un vendedor, este no sabe que debe reservar y puede vender a otro antes de la confirmación. Opciones a valorar: reintentar el envío, pedir acuse de recibo o permitir al vendedor indicar que ya no está disponible al confirmar. La última cambiaría el significado de un acuerdo (D-85). Se decide al diseñar los agentes.
-- Autenticación del coordinador ante el orquestador: comprobar que el `sender` es el comprador solo compara un valor declarado. A2A permite declarar esquemas de seguridad en la AgentCard; queda por diseñar (D-89).
 
 Casos de uso diseñados: CU-01 a CU-07. Con ellos queda cubierto todo el ciclo de vida de una sesión y de una petición en el orquestador.
